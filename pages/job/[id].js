@@ -13,7 +13,7 @@ export default function JobPage() {
   const [tasks, setTasks] = useState([])
   const [activity, setActivity] = useState([])
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('ready')
+  const [tab, setTab] = useState('active')
   const [expanded, setExpanded] = useState({})
   const [collapsedSections, setCollapsedSections] = useState({})
   const [modal, setModal] = useState(null)
@@ -265,6 +265,7 @@ export default function JobPage() {
   }
 
   function filteredTasks() {
+    if (tab === 'active') return tasks.filter(t => t.status === 'ready' || t.status === 'blocked')
     return tasks.filter(t => t.status === tab)
   }
 
@@ -289,6 +290,7 @@ export default function JobPage() {
 
   const canEdit = userRole() === 'admin' || userRole() === 'carpenter'
   const counts = {
+    active: tasks.filter(t => t.status === 'ready' || t.status === 'blocked').length,
     ready: tasks.filter(t => t.status === 'ready').length,
     blocked: tasks.filter(t => t.status === 'blocked').length,
     done: tasks.filter(t => t.status === 'done').length
@@ -413,6 +415,9 @@ export default function JobPage() {
         </div>
 
         <div className="tabs">
+          <button className={`tab ${tab === 'active' ? 'active' : ''}`} onClick={() => setTab('active')}>
+            Active <span style={{ opacity: 0.6 }}>{counts.active}</span>
+          </button>
           <button className={`tab ${tab === 'ready' ? 'active' : ''}`} onClick={() => setTab('ready')}>
             Ready <span style={{ opacity: 0.6 }}>{counts.ready}</span>
           </button>
@@ -438,7 +443,7 @@ export default function JobPage() {
         )}
 
         {allFiltered.length === 0 && sections.length === 0 && (
-          <div className="empty">No {tab} tasks yet.</div>
+          <div className="empty">No {tab === 'active' ? 'active' : tab} tasks yet.</div>
         )}
 
         {unsectioned.length > 0 && (
