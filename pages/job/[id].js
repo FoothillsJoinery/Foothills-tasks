@@ -349,28 +349,33 @@ export default function JobPage() {
           </button>
         </div>
 
-        {userRole() === 'admin' && (
-          <div className="share-card">
-            <div style={{ fontSize: 12, color: '#5f5e5a' }}>Share this job with your team or client</div>
-            <div className="share-row">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#185fa5" strokeWidth="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-              <span className="share-label">Carpenter link</span>
-              <button className="share-btn" onClick={() => copyShareLink('carpenter')}>Copy link</button>
-            </div>
-            <div className="share-row">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#854f0b" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-              <span className="share-label">Client / site super link</span>
-              <button className="share-btn" onClick={() => copyShareLink('client')}>Copy link</button>
-            </div>
-          </div>
-        )}
-
+        {/* Action bar - always visible for editors */}
         {canEdit && (
-          <div style={{ padding: '8px 16px 0' }}>
-            <button className="dashed-btn" style={{ borderRadius: 8, padding: '8px 12px', fontSize: 13 }} onClick={() => { setNewSectionName(''); setModal('section') }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+          <div style={{ display: 'flex', gap: 8, padding: '10px 16px 4px', alignItems: 'center' }}>
+            <button
+              onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '' }); setModal('add') }}
+              style={{ flex: 1, padding: '10px 0', background: '#3b6d11', color: 'white', border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+              Add task
+            </button>
+            <button
+              onClick={() => { setNewSectionName(''); setModal('section') }}
+              style={{ flex: 1, padding: '10px 0', background: 'white', color: '#3b6d11', border: '1.5px solid #3b6d11', borderRadius: 8, fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit' }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3b6d11" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
               Add section
             </button>
+            {userRole() === 'admin' && (
+              <button
+                onClick={() => setModal('share')}
+                style={{ padding: '10px 12px', background: 'white', color: '#888780', border: '1px solid #e8e6df', borderRadius: 8, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'inherit' }}
+                title="Share job"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Share
+              </button>
+            )}
           </div>
         )}
 
@@ -405,11 +410,7 @@ export default function JobPage() {
           )
         })}
 
-        {canEdit && (
-          <button className="fab" onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '' }); setModal('add') }} aria-label="Add task">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
-        )}
+
 
         {(modal === 'add' || modal === 'edit') && (
           <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
@@ -495,7 +496,31 @@ export default function JobPage() {
           </div>
         )}
 
-        {toast && <div className="toast">{toast}</div>}
+        {modal === 'share' && (
+          <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+            <div className="sheet">
+              <button className="sheet-close" onClick={() => setModal(null)}>×</button>
+              <div className="sheet-title">Share this job</div>
+              <p style={{ fontSize: 13, color: '#5f5e5a', marginBottom: 16 }}>Copy a link and send it by text or email. They tap the link, enter their name, and they're in.</p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ background: '#e6f1fb', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#185fa5' }}>Carpenter link</div>
+                    <div style={{ fontSize: 12, color: '#5f5e5a', marginTop: 2 }}>Can add & edit tasks, log needs, check off work</div>
+                  </div>
+                  <button className="share-btn" onClick={() => { copyShareLink('carpenter'); setModal(null) }}>Copy</button>
+                </div>
+                <div style={{ background: '#faeeda', borderRadius: 10, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: '#854f0b' }}>Client / site super link</div>
+                    <div style={{ fontSize: 12, color: '#5f5e5a', marginTop: 2 }}>Can view everything and add requests</div>
+                  </div>
+                  <button className="share-btn" onClick={() => { copyShareLink('client'); setModal(null) }}>Copy</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )
