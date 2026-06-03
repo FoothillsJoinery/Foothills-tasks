@@ -18,7 +18,7 @@ export default function JobPage() {
   const [collapsedSections, setCollapsedSections] = useState({})
   const [modal, setModal] = useState(null)
   const [editId, setEditId] = useState(null)
-  const [form, setForm] = useState({ title: '', notes: '', status: 'ready', section_id: '' })
+  const [form, setForm] = useState({ title: '', notes: '', status: 'ready', section_id: '', needText: '' })
   const [needForm, setNeedForm] = useState({ text: '', task_id: null })
   const [resolveForm, setResolveForm] = useState({ answer: '', task_id: null, need_id: null })
   const [newSectionName, setNewSectionName] = useState('')
@@ -93,9 +93,20 @@ export default function JobPage() {
     }]).select('*, needs(*)').single()
     setSaving(false)
     if (!error && data) {
-      setTasks(prev => [...prev, data])
+      let taskWithNeeds = data
+      if (form.needText.trim() && data.status === 'blocked') {
+        const { data: needData } = await supabase.from('needs').insert([{
+          task_id: data.id,
+          job_id: id,
+          text: form.needText.trim(),
+          requested_by: userName()
+        }]).select().single()
+        if (needData) taskWithNeeds = { ...data, needs: [needData] }
+        await logActivity(`logged need on "${data.title}"`)
+      }
+      setTasks(prev => [...prev, taskWithNeeds])
       await logActivity(`added "${data.title}" (${data.status})`)
-      setForm({ title: '', notes: '', status: 'ready', section_id: '' })
+      setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '' })
       setModal(null)
       setTab(data.status)
       showToast('Task added')
@@ -114,7 +125,18 @@ export default function JobPage() {
     }).eq('id', editId).select('*, needs(*)').single()
     setSaving(false)
     if (!error && data) {
-      setTasks(prev => prev.map(t => t.id === editId ? data : t))
+      let taskWithNeeds = data
+      if (form.needText.trim() && data.status === 'blocked') {
+        const { data: needData } = await supabase.from('needs').insert([{
+          task_id: data.id,
+          job_id: id,
+          text: form.needText.trim(),
+          requested_by: userName()
+        }]).select().single()
+        if (needData) taskWithNeeds = { ...data, needs: [...(data.needs || []), needData] }
+        await logActivity(`logged need on "${data.title}"`)
+      }
+      setTasks(prev => prev.map(t => t.id === editId ? taskWithNeeds : t))
       await logActivity(`edited "${data.title}"`)
       setModal(null)
       setEditId(null)
@@ -250,7 +272,7 @@ export default function JobPage() {
     const t = tasks.find(x => x.id === taskId)
     if (!t) return
     setEditId(taskId)
-    setForm({ title: t.title, notes: t.notes || '', status: t.status === 'done' ? (t.prev_status || 'ready') : t.status, section_id: t.section_id || '' })
+    setForm({ title: t.title, notes: t.notes || '', status: t.status === 'done' ? (t.prev_status || 'ready') : t.status, section_id: t.section_id || '', needText: '' })
     setModal('edit')
   }
 
@@ -535,9 +557,15 @@ export default function JobPage() {
                 <div className="form-group">
                   <label className="form-label">Status</label>
                   <div className="toggle-row">
-                    <button className={`tbtn ${form.status === 'ready' ? 't-ready' : ''}`} onClick={() => setForm(f => ({ ...f, status: 'ready' }))}>Ready to go</button>
+                    <button className={`tbtn ${form.status === 'ready' ? 't-ready' : ''}`} onClick={() => setForm(f => ({ ...f, status: 'ready', needText: '' }))}>Ready to go</button>
                     <button className={`tbtn ${form.status === 'blocked' ? 't-blocked' : ''}`} onClick={() => setForm(f => ({ ...f, status: 'blocked' }))}>Blocked</button>
                   </div>
+                </div>
+              )}
+              {form.status === 'blocked' && (
+                <div className="form-group">
+                  <label className="form-label">What's needed? (optional)</label>
+                  <textarea placeholder="e.g. Confirm upper cabinet height with client" value={form.needText} onChange={e => setForm(f => ({ ...f, needText: e.target.value }))} />
                 </div>
               )}
               {sections.length === 0 && (
