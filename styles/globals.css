@@ -203,6 +203,8 @@ html, body {
 .action-btn:hover {
   background: #f5f4f0;
 }
+.action-btn-delete { color: #993c1d; border-color: #f5c9bb; }
+.action-btn-delete:hover { background: #faece7; border-color: #d85a30; }
 
 /* Needs */
 .needs-label {
