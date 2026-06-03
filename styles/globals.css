@@ -403,6 +403,37 @@ textarea { min-height: 70px; resize: vertical; }
 }
 .dashed-btn:hover { border-color: #3b6d11; color: #3b6d11; }
 
+/* Sub-sections */
+.subsection-wrap {
+  margin-left: 16px;
+  border-left: 2px solid #e8e6df;
+  padding-left: 12px;
+  margin-top: 6px;
+}
+.subsection-header {
+  margin-bottom: 6px;
+}
+.subsection-name {
+  font-size: 10.5px;
+  color: #b4b2a9;
+}
+.subsection-add-btn {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: #b4b2a9;
+  background: none;
+  border: 1px solid #e8e6df;
+  border-radius: 20px;
+  padding: 2px 8px;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+.subsection-add-btn:hover { color: #3b6d11; border-color: #3b6d11; }
+
 /* Action bar */
 .action-bar {
   display: flex;

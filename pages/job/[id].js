@@ -22,6 +22,7 @@ export default function JobPage() {
   const [needForm, setNeedForm] = useState({ text: '', task_id: null })
   const [resolveForm, setResolveForm] = useState({ answer: '', task_id: null, need_id: null })
   const [newSectionName, setNewSectionName] = useState('')
+  const [parentSectionId, setParentSectionId] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -183,14 +184,16 @@ export default function JobPage() {
     const { data, error } = await supabase.from('sections').insert([{
       job_id: id,
       name: newSectionName.trim(),
-      created_by: userName()
+      created_by: userName(),
+      parent_id: parentSectionId || null
     }]).select().single()
     setSaving(false)
     if (!error && data) {
       setSections(prev => [...prev, data])
       setNewSectionName('')
+      setParentSectionId(null)
       setModal(null)
-      showToast('Section added')
+      showToast(parentSectionId ? 'Sub-section added' : 'Section added')
     }
   }
 
@@ -357,7 +360,7 @@ export default function JobPage() {
 
         {canEdit && (
           <div className="action-bar">
-            <button className="action-bar-btn" onClick={() => setModal('section')}>
+            <button className="action-bar-btn" onClick={() => { setParentSectionId(null); setNewSectionName(''); setModal('section') }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
               Add Section
             </button>
@@ -378,9 +381,10 @@ export default function JobPage() {
           </div>
         )}
 
-        {sections.map(sec => {
+        {sections.filter(s => !s.parent_id).map(sec => {
           const secTasks = allFiltered.filter(t => t.section_id === sec.id)
           const collapsed = collapsedSections[sec.id]
+          const subSections = sections.filter(s => s.parent_id === sec.id)
           return (
             <div key={sec.id} className="section-wrap">
               <div className="section-header" onClick={() => setCollapsedSections(prev => ({ ...prev, [sec.id]: !prev[sec.id] }))}>
@@ -389,11 +393,44 @@ export default function JobPage() {
                 </svg>
                 <span className="section-name">{sec.name}</span>
                 <span className="section-count">{secTasks.length}</span>
+                {canEdit && (
+                  <button
+                    className="subsection-add-btn"
+                    onClick={e => { e.stopPropagation(); setParentSectionId(sec.id); setNewSectionName(''); setModal('section') }}
+                    title="Add sub-section"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                    Sub-section
+                  </button>
+                )}
               </div>
               {!collapsed && (
-                secTasks.length > 0
-                  ? secTasks.map(task => <TaskCard key={task.id} task={task} />)
-                  : <div style={{ fontSize: 13, color: '#b4b2a9', padding: '4px 0 12px' }}>No {tab} tasks in this section.</div>
+                <>
+                  {secTasks.length > 0
+                    ? secTasks.map(task => <TaskCard key={task.id} task={task} />)
+                    : subSections.length === 0 && <div style={{ fontSize: 13, color: '#b4b2a9', padding: '4px 0 8px' }}>No {tab} tasks in this section.</div>
+                  }
+                  {subSections.map(sub => {
+                    const subTasks = allFiltered.filter(t => t.section_id === sub.id)
+                    const subCollapsed = collapsedSections[sub.id]
+                    return (
+                      <div key={sub.id} className="subsection-wrap">
+                        <div className="section-header subsection-header" onClick={() => setCollapsedSections(prev => ({ ...prev, [sub.id]: !prev[sub.id] }))}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#b4b2a9" strokeWidth="2">
+                            {subCollapsed ? <path d="M9 18l6-6-6-6"/> : <path d="M6 9l6 6 6-6"/>}
+                          </svg>
+                          <span className="section-name subsection-name">{sub.name}</span>
+                          <span className="section-count">{subTasks.length}</span>
+                        </div>
+                        {!subCollapsed && (
+                          subTasks.length > 0
+                            ? subTasks.map(task => <TaskCard key={task.id} task={task} />)
+                            : <div style={{ fontSize: 13, color: '#b4b2a9', padding: '4px 0 8px' }}>No {tab} tasks here.</div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </>
               )}
             </div>
           )
@@ -422,7 +459,14 @@ export default function JobPage() {
                 <label className="form-label">Section (optional)</label>
                 <select value={form.section_id} onChange={e => setForm(f => ({ ...f, section_id: e.target.value }))}>
                   <option value="">— No section —</option>
-                  {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  {sections.filter(s => !s.parent_id).map(s => (
+                    <optgroup key={s.id} label={s.name}>
+                      <option value={s.id}>{s.name}</option>
+                      {sections.filter(sub => sub.parent_id === s.id).map(sub => (
+                        <option key={sub.id} value={sub.id}>↳ {sub.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
                 </select>
               </div>
               {!(modal === 'edit' && tasks.find(t => t.id === editId)?.status === 'done') && (
@@ -451,12 +495,17 @@ export default function JobPage() {
           <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
             <div className="sheet">
               <button className="sheet-close" onClick={() => setModal(null)}>×</button>
-              <div className="sheet-title">Add section</div>
+              <div className="sheet-title">{parentSectionId ? `Add sub-section` : 'Add section'}</div>
+              {parentSectionId && (
+                <p style={{ fontSize: 13, color: '#888780', marginBottom: 14 }}>
+                  Under: <strong style={{ color: '#1a1a18' }}>{sections.find(s => s.id === parentSectionId)?.name}</strong>
+                </p>
+              )}
               <div className="form-group">
-                <label className="form-label">Section name</label>
-                <input type="text" placeholder="e.g. Floor 1, Kitchen, Exterior" value={newSectionName} onChange={e => setNewSectionName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && addSection()} />
+                <label className="form-label">{parentSectionId ? 'Sub-section name' : 'Section name'}</label>
+                <input type="text" placeholder={parentSectionId ? 'e.g. Upper Cabinets, Phase 1' : 'e.g. Floor 1, Kitchen, Exterior'} value={newSectionName} onChange={e => setNewSectionName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && addSection()} />
               </div>
-              <button className="submit-btn" onClick={addSection} disabled={saving}>{saving ? 'Adding...' : 'Add section'}</button>
+              <button className="submit-btn" onClick={addSection} disabled={saving}>{saving ? 'Adding...' : parentSectionId ? 'Add sub-section' : 'Add section'}</button>
             </div>
           </div>
         )}

@@ -10,10 +10,14 @@ create table jobs (
 create table sections (
   id uuid default gen_random_uuid() primary key,
   job_id uuid references jobs(id) on delete cascade,
+  parent_id uuid references sections(id) on delete cascade,
   name text not null,
   created_by text,
   created_at timestamptz default now()
 );
+
+-- Migration (run if sections table already exists):
+-- alter table sections add column if not exists parent_id uuid references sections(id) on delete cascade;
 
 create table tasks (
   id uuid default gen_random_uuid() primary key,
