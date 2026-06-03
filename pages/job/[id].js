@@ -23,6 +23,9 @@ export default function JobPage() {
   const [resolveForm, setResolveForm] = useState({ answer: '', task_id: null, need_id: null })
   const [newSectionName, setNewSectionName] = useState('')
   const [parentSectionId, setParentSectionId] = useState(null)
+  const [editSectionId, setEditSectionId] = useState(null)
+  const [editSectionName, setEditSectionName] = useState('')
+  const [editSectionParent, setEditSectionParent] = useState('')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -175,6 +178,33 @@ export default function JobPage() {
       setResolveForm({ answer: '', task_id: null, need_id: null })
       setModal(null)
       showToast('Need resolved')
+    }
+  }
+
+  async function saveSection() {
+    if (!editSectionName.trim()) return
+    setSaving(true)
+    const sec = sections.find(s => s.id === editSectionId)
+    const { data, error } = await supabase.from('sections').update({
+      name: editSectionName.trim(),
+      parent_id: sec.parent_id !== undefined ? (editSectionParent || null) : null
+    }).eq('id', editSectionId).select().single()
+    setSaving(false)
+    if (!error && data) {
+      setSections(prev => prev.map(s => s.id === editSectionId ? data : s))
+      setModal(null)
+      setEditSectionId(null)
+      showToast('Section updated')
+    }
+  }
+
+  async function deleteSection(secId) {
+    if (!confirm('Delete this section? Tasks inside will become unsectioned.')) return
+    const { error } = await supabase.from('sections').delete().eq('id', secId)
+    if (!error) {
+      setSections(prev => prev.filter(s => s.id !== secId && s.parent_id !== secId))
+      setTasks(prev => prev.map(t => t.section_id === secId ? { ...t, section_id: null } : t))
+      showToast('Section deleted')
     }
   }
 
@@ -394,14 +424,23 @@ export default function JobPage() {
                 <span className="section-name">{sec.name}</span>
                 <span className="section-count">{secTasks.length}</span>
                 {canEdit && (
-                  <button
-                    className="subsection-add-btn"
-                    onClick={e => { e.stopPropagation(); setParentSectionId(sec.id); setNewSectionName(''); setModal('section') }}
-                    title="Add sub-section"
-                  >
-                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
-                    Sub-section
-                  </button>
+                  <>
+                    <button
+                      className="subsection-add-btn"
+                      onClick={e => { e.stopPropagation(); setParentSectionId(sec.id); setNewSectionName(''); setModal('section') }}
+                      title="Add sub-section"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
+                      Sub-section
+                    </button>
+                    <button
+                      className="subsection-add-btn"
+                      onClick={e => { e.stopPropagation(); setEditSectionId(sec.id); setEditSectionName(sec.name); setEditSectionParent(''); setModal('editSection') }}
+                      title="Edit section"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    </button>
+                  </>
                 )}
               </div>
               {!collapsed && (
@@ -421,6 +460,15 @@ export default function JobPage() {
                           </svg>
                           <span className="section-name subsection-name">{sub.name}</span>
                           <span className="section-count">{subTasks.length}</span>
+                          {canEdit && (
+                            <button
+                              className="subsection-add-btn"
+                              onClick={e => { e.stopPropagation(); setEditSectionId(sub.id); setEditSectionName(sub.name); setEditSectionParent(sub.parent_id || ''); setModal('editSection') }}
+                              title="Edit sub-section"
+                            >
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
+                          )}
                         </div>
                         {!subCollapsed && (
                           subTasks.length > 0
@@ -534,6 +582,36 @@ export default function JobPage() {
                 <textarea placeholder="e.g. Client confirmed 36 inches, see email 5/5" value={resolveForm.answer} onChange={e => setResolveForm(f => ({ ...f, answer: e.target.value }))} autoFocus />
               </div>
               <button className="submit-btn" onClick={resolveNeed} disabled={saving}>{saving ? 'Saving...' : 'Mark resolved'}</button>
+            </div>
+          </div>
+        )}
+
+        {modal === 'editSection' && (
+          <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+            <div className="sheet">
+              <button className="sheet-close" onClick={() => setModal(null)}>×</button>
+              <div className="sheet-title">{sections.find(s => s.id === editSectionId)?.parent_id ? 'Edit sub-section' : 'Edit section'}</div>
+              <div className="form-group">
+                <label className="form-label">Name</label>
+                <input type="text" value={editSectionName} onChange={e => setEditSectionName(e.target.value)} autoFocus onKeyDown={e => e.key === 'Enter' && saveSection()} />
+              </div>
+              {sections.find(s => s.id === editSectionId)?.parent_id && (
+                <div className="form-group">
+                  <label className="form-label">Move to a different section</label>
+                  <select value={editSectionParent} onChange={e => setEditSectionParent(e.target.value)}>
+                    {sections.filter(s => !s.parent_id && s.id !== editSectionId).map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <button className="submit-btn" onClick={saveSection} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+              <button
+                onClick={() => { setModal(null); deleteSection(editSectionId) }}
+                style={{ width: '100%', marginTop: 10, padding: 13, background: 'none', border: '1px solid #e8e6df', borderRadius: 8, color: '#993c1d', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Delete section
+              </button>
             </div>
           </div>
         )}
