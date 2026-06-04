@@ -81,7 +81,7 @@ export default function JobPage() {
   }
 
   async function addTask() {
-    if (!form.title.trim()) return
+    if (!form.title.trim()) { showToast('Please enter a description'); return }
     setSaving(true)
     const { data, error } = await supabase.from('tasks').insert([{
       job_id: id,
@@ -92,7 +92,8 @@ export default function JobPage() {
       created_by: userName()
     }]).select('*, needs(*)').single()
     setSaving(false)
-    if (!error && data) {
+    if (error) { showToast('Error saving task — try again'); return }
+    if (data) {
       let taskWithNeeds = data
       if (form.needText.trim() && data.status === 'blocked') {
         const { data: needData } = await supabase.from('needs').insert([{
@@ -108,13 +109,13 @@ export default function JobPage() {
       await logActivity(`added "${data.title}" (${data.status})`)
       setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '' })
       setModal(null)
-      setTab(data.status)
+      setTab(tab === 'done' ? data.status : tab)
       showToast('Task added')
     }
   }
 
   async function saveEdit() {
-    if (!form.title.trim()) return
+    if (!form.title.trim()) { showToast('Please enter a description'); return }
     setSaving(true)
     const task = tasks.find(t => t.id === editId)
     const { data, error } = await supabase.from('tasks').update({
@@ -124,7 +125,8 @@ export default function JobPage() {
       section_id: form.section_id || null
     }).eq('id', editId).select('*, needs(*)').single()
     setSaving(false)
-    if (!error && data) {
+    if (error) { showToast('Error saving — try again'); return }
+    if (data) {
       let taskWithNeeds = data
       if (form.needText.trim() && data.status === 'blocked') {
         const { data: needData } = await supabase.from('needs').insert([{
