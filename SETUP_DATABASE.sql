@@ -3,6 +3,10 @@
 create table jobs (
   id uuid default gen_random_uuid() primary key,
   name text not null,
+  client_email text,
+  email_enabled boolean default false,
+  last_weekly_sent timestamptz,
+  last_daily_sent timestamptz,
   created_by text,
   created_at timestamptz default now()
 );
@@ -38,6 +42,7 @@ create table needs (
   task_id uuid references tasks(id) on delete cascade,
   job_id uuid references jobs(id) on delete cascade,
   text text not null,
+  category text,
   requested_by text,
   created_at timestamptz default now(),
   resolved_at timestamptz,
@@ -52,6 +57,13 @@ create table activity (
   msg text,
   created_at timestamptz default now()
 );
+
+-- Migrations (run if tables already exist):
+-- alter table jobs add column if not exists client_email text;
+-- alter table jobs add column if not exists email_enabled boolean default false;
+-- alter table jobs add column if not exists last_weekly_sent timestamptz;
+-- alter table jobs add column if not exists last_daily_sent timestamptz;
+-- alter table needs add column if not exists category text;
 
 -- Allow public read/write (the app handles access via job links)
 alter table jobs enable row level security;

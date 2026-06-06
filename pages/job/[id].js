@@ -18,15 +18,17 @@ export default function JobPage() {
   const [collapsedSections, setCollapsedSections] = useState({})
   const [modal, setModal] = useState(null)
   const [editId, setEditId] = useState(null)
-  const [form, setForm] = useState({ title: '', notes: '', status: 'ready', section_id: '', needText: '' })
-  const [needForm, setNeedForm] = useState({ text: '', task_id: null })
+  const [form, setForm] = useState({ title: '', notes: '', status: 'ready', section_id: '', needText: '', needCategory: '' })
+  const [needForm, setNeedForm] = useState({ text: '', category: '', task_id: null })
   const [resolveForm, setResolveForm] = useState({ answer: '', task_id: null, need_id: null })
+  const [editNeedForm, setEditNeedForm] = useState({ text: '', category: '', task_id: null, need_id: null })
   const [newSectionName, setNewSectionName] = useState('')
   const [parentSectionId, setParentSectionId] = useState(null)
   const [editSectionId, setEditSectionId] = useState(null)
   const [editSectionName, setEditSectionName] = useState('')
   const [editSectionParent, setEditSectionParent] = useState('')
   const [saving, setSaving] = useState(false)
+  const [sending, setSending] = useState(false)
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -100,6 +102,7 @@ export default function JobPage() {
           task_id: data.id,
           job_id: id,
           text: form.needText.trim(),
+          category: form.needCategory || null,
           requested_by: userName()
         }]).select().single()
         if (needData) taskWithNeeds = { ...data, needs: [needData] }
@@ -107,7 +110,7 @@ export default function JobPage() {
       }
       setTasks(prev => [...prev, taskWithNeeds])
       await logActivity(`added "${data.title}" (${data.status})`)
-      setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '' })
+      setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '', needCategory: '' })
       setModal(null)
       setTab(tab === 'done' ? data.status : tab)
       showToast('Task added')
@@ -133,6 +136,7 @@ export default function JobPage() {
           task_id: data.id,
           job_id: id,
           text: form.needText.trim(),
+          category: form.needCategory || null,
           requested_by: userName()
         }]).select().single()
         if (needData) taskWithNeeds = { ...data, needs: [...(data.needs || []), needData] }
@@ -172,13 +176,14 @@ export default function JobPage() {
       task_id: needForm.task_id,
       job_id: id,
       text: needForm.text.trim(),
+      category: needForm.category || null,
       requested_by: userName()
     }]).select().single()
     setSaving(false)
     if (!error && data) {
       setTasks(prev => prev.map(t => t.id === needForm.task_id ? { ...t, needs: [...(t.needs || []), data] } : t))
       await logActivity(`logged need on "${task?.title}"`)
-      setNeedForm({ text: '', task_id: null })
+      setNeedForm({ text: '', category: '', task_id: null })
       setModal(null)
       showToast('Need logged')
     }
@@ -202,6 +207,21 @@ export default function JobPage() {
       setResolveForm({ answer: '', task_id: null, need_id: null })
       setModal(null)
       showToast('Need resolved')
+    }
+  }
+
+  async function saveEditNeed() {
+    if (!editNeedForm.text.trim()) return
+    setSaving(true)
+    const { data, error } = await supabase.from('needs').update({ text: editNeedForm.text.trim(), category: editNeedForm.category || null }).eq('id', editNeedForm.need_id).select().single()
+    setSaving(false)
+    if (!error && data) {
+      setTasks(prev => prev.map(t => t.id === editNeedForm.task_id
+        ? { ...t, needs: t.needs.map(n => n.id === editNeedForm.need_id ? data : n) }
+        : t))
+      setEditNeedForm({ text: '', category: '', task_id: null, need_id: null })
+      setModal(null)
+      showToast('Need updated')
     }
   }
 
@@ -266,6 +286,30 @@ export default function JobPage() {
     setTimeout(() => setToast(null), 2200)
   }
 
+  async function sendReport() {
+    if (!job?.client_email) { showToast('No client email on this job'); return }
+    setSending(true)
+    try {
+      const res = await fetch('/api/send-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: id })
+      })
+      if (res.ok) showToast('Report sent to client')
+      else showToast('Failed to send — check console')
+    } catch (e) {
+      showToast('Failed to send — check console')
+    }
+    setSending(false)
+  }
+
+  async function toggleEmailEnabled() {
+    const newVal = !job.email_enabled
+    const { error } = await supabase.from('jobs').update({ email_enabled: newVal }).eq('id', id)
+    if (!error) setJob(prev => ({ ...prev, email_enabled: newVal }))
+  }
+
+
   function filteredTasks() {
     if (tab === 'active') return tasks.filter(t => t.status === 'ready' || t.status === 'blocked')
     return tasks.filter(t => t.status === tab)
@@ -275,7 +319,7 @@ export default function JobPage() {
     const t = tasks.find(x => x.id === taskId)
     if (!t) return
     setEditId(taskId)
-    setForm({ title: t.title, notes: t.notes || '', status: t.status === 'done' ? (t.prev_status || 'ready') : t.status, section_id: t.section_id || '', needText: '' })
+    setForm({ title: t.title, notes: t.notes || '', status: t.status === 'done' ? (t.prev_status || 'ready') : t.status, section_id: t.section_id || '', needText: '', needCategory: '' })
     setModal('edit')
   }
 
@@ -358,11 +402,15 @@ export default function JobPage() {
                   <div key={need.id} className="need-row">
                     <div style={{ flex: 1 }}>
                       <div className="need-text">{need.text}</div>
+                      {need.category && <div style={{ fontSize: 11, color: '#888780', marginTop: 2, fontStyle: 'italic' }}>{need.category}</div>}
                       <div className="need-meta">By {need.requested_by} · {ts(need.requested_at || need.created_at)}{need.resolved_at ? ` · Answered ${ts(need.resolved_at)}` : ''}</div>
                       {need.answer && <div className="need-answer">✓ {need.answer}</div>}
                     </div>
                     {!need.resolved_at && canEdit
-                      ? <button className="resolve-btn" onClick={() => { setResolveForm({ answer: '', task_id: task.id, need_id: need.id }); setModal('resolve') }}>Resolve</button>
+                      ? <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                          <button className="resolve-btn" onClick={() => { setResolveForm({ answer: '', task_id: task.id, need_id: need.id }); setModal('resolve') }}>Resolve</button>
+                          <button className="resolve-btn" style={{ background: 'none', color: '#8a8880', border: '1px solid #e8e6df' }} onClick={() => { setEditNeedForm({ text: need.text, category: need.category || '', task_id: task.id, need_id: need.id }); setModal('editNeed') }}>Edit</button>
+                        </div>
                       : <span className={`npill ${need.resolved_at ? 'npill-resolved' : 'npill-pending'}`}>{need.resolved_at ? 'Received' : 'Pending'}</span>
                     }
                   </div>
@@ -408,10 +456,20 @@ export default function JobPage() {
           )}
           <span className="topbar-title">{job?.name}</span>
           {userRole() === 'admin' && (
-            <button className="share-icon-btn" onClick={() => setModal('share')} aria-label="Share">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-              Share
-            </button>
+            <>
+              <button className="share-icon-btn" onClick={() => router.push(`/report/${id}`)} aria-label="Report">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                Report
+              </button>
+              <button className="share-icon-btn" onClick={sendReport} disabled={sending} aria-label="Send report">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                {sending ? 'Sending…' : 'Send'}
+              </button>
+              <button className="share-icon-btn" onClick={() => setModal('share')} aria-label="Share">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                Share
+              </button>
+            </>
           )}
           <span className="topbar-role">{userName()}</span>
         </div>
@@ -570,10 +628,24 @@ export default function JobPage() {
                 </div>
               )}
               {form.status === 'blocked' && (
-                <div className="form-group">
-                  <label className="form-label">What's needed? (optional)</label>
-                  <textarea placeholder="e.g. Confirm upper cabinet height with client" value={form.needText} onChange={e => setForm(f => ({ ...f, needText: e.target.value }))} />
-                </div>
+                <>
+                  <div className="form-group">
+                    <label className="form-label">What's needed? (optional)</label>
+                    <textarea placeholder="e.g. Confirm upper cabinet height with client" value={form.needText} onChange={e => setForm(f => ({ ...f, needText: e.target.value }))} />
+                  </div>
+                  {form.needText.trim() && (
+                    <div className="form-group">
+                      <label className="form-label">Category</label>
+                      <select value={form.needCategory} onChange={e => setForm(f => ({ ...f, needCategory: e.target.value }))}>
+                        <option value="">— Select a category —</option>
+                        <option>Decision/answer needed from client</option>
+                        <option>Material not supplied by Foothills Joinery</option>
+                        <option>Prerequisite task — Foothills Joinery</option>
+                        <option>Prerequisite task — other contractor</option>
+                      </select>
+                    </div>
+                  )}
+                </>
               )}
               {sections.length === 0 && (
                 <p style={{ fontSize: 12, color: '#888780', marginBottom: 12 }}>
@@ -616,6 +688,16 @@ export default function JobPage() {
                 <label className="form-label">What's needed (info or material)</label>
                 <textarea placeholder="e.g. Confirm upper cabinet height with client" value={needForm.text} onChange={e => setNeedForm(f => ({ ...f, text: e.target.value }))} autoFocus />
               </div>
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select value={needForm.category} onChange={e => setNeedForm(f => ({ ...f, category: e.target.value }))}>
+                  <option value="">— Select a category —</option>
+                  <option>Decision/answer needed from client</option>
+                  <option>Material not supplied by Foothills Joinery</option>
+                  <option>Prerequisite task — Foothills Joinery</option>
+                  <option>Prerequisite task — other contractor</option>
+                </select>
+              </div>
               <button className="submit-btn" onClick={addNeed} disabled={saving}>{saving ? 'Logging...' : 'Log need'}</button>
             </div>
           </div>
@@ -631,6 +713,30 @@ export default function JobPage() {
                 <textarea placeholder="e.g. Client confirmed 36 inches, see email 5/5" value={resolveForm.answer} onChange={e => setResolveForm(f => ({ ...f, answer: e.target.value }))} autoFocus />
               </div>
               <button className="submit-btn" onClick={resolveNeed} disabled={saving}>{saving ? 'Saving...' : 'Mark resolved'}</button>
+            </div>
+          </div>
+        )}
+
+        {modal === 'editNeed' && (
+          <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+            <div className="sheet">
+              <button className="sheet-close" onClick={() => setModal(null)}>×</button>
+              <div className="sheet-title">Edit need</div>
+              <div className="form-group">
+                <label className="form-label">What's needed (info or material)</label>
+                <textarea placeholder="e.g. Confirm upper cabinet height with client" value={editNeedForm.text} onChange={e => setEditNeedForm(f => ({ ...f, text: e.target.value }))} autoFocus />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select value={editNeedForm.category} onChange={e => setEditNeedForm(f => ({ ...f, category: e.target.value }))}>
+                  <option value="">— Select a category —</option>
+                  <option>Decision/answer needed from client</option>
+                  <option>Material not supplied by Foothills Joinery</option>
+                  <option>Prerequisite task — Foothills Joinery</option>
+                  <option>Prerequisite task — other contractor</option>
+                </select>
+              </div>
+              <button className="submit-btn" onClick={saveEditNeed} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
             </div>
           </div>
         )}
@@ -690,6 +796,36 @@ export default function JobPage() {
                   </div>
                 </div>
                 <button className="share-btn" onClick={() => { copyShareLink('client'); setModal(null) }}>Copy link</button>
+              </div>
+
+              <div style={{ borderTop: '1px solid #e8e6df', marginTop: 16, paddingTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Automated email reports</div>
+                <div className="share-sheet-row" style={{ alignItems: 'center' }}>
+                  <div className="share-sheet-info">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={job?.email_enabled ? '#1a8a4a' : '#888780'} strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a18' }}>
+                        {job?.email_enabled ? 'Emails on' : 'Emails off'}
+                      </div>
+                      <div style={{ fontSize: 12, color: '#888780' }}>
+                        {job?.client_email
+                          ? `Weekly + daily digest to ${job.client_email}`
+                          : 'No client email set on this job'}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    className="share-btn"
+                    onClick={toggleEmailEnabled}
+                    disabled={!job?.client_email}
+                    style={job?.email_enabled ? { background: '#e8f5ee', color: '#1a8a4a', border: '1px solid #b8dfc8' } : {}}
+                  >
+                    {job?.email_enabled ? 'Turn off' : 'Turn on'}
+                  </button>
+                </div>
+                {job?.last_weekly_sent && (
+                  <div style={{ fontSize: 11, color: '#b4b2a9', marginTop: 6 }}>Last weekly sent {ts(job.last_weekly_sent)}</div>
+                )}
               </div>
             </div>
           </div>

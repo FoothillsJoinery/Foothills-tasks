@@ -10,6 +10,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true)
   const [showNewJob, setShowNewJob] = useState(false)
   const [newJobName, setNewJobName] = useState('')
+  const [newJobClientEmail, setNewJobClientEmail] = useState('')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
 
@@ -35,12 +36,14 @@ export default function Home() {
     setSaving(true)
     const { data, error } = await supabase.from('jobs').insert([{
       name: newJobName.trim(),
+      client_email: newJobClientEmail.trim() || null,
       created_by: user.email
     }]).select().single()
     setSaving(false)
     if (!error && data) {
       setJobs(prev => [data, ...prev])
       setNewJobName('')
+      setNewJobClientEmail('')
       setShowNewJob(false)
       showToast('Job created')
     }
@@ -120,6 +123,16 @@ export default function Home() {
                   onChange={e => setNewJobName(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && createJob()}
                   autoFocus
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Client email (for need notifications)</label>
+                <input
+                  type="email"
+                  placeholder="e.g. client@example.com"
+                  value={newJobClientEmail}
+                  onChange={e => setNewJobClientEmail(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && createJob()}
                 />
               </div>
               <button className="submit-btn" onClick={createJob} disabled={saving}>
