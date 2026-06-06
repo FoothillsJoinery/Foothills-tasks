@@ -495,7 +495,7 @@ export default function JobPage() {
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
               Add Section
             </button>
-            <button className="action-bar-btn action-bar-btn-primary" onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '' }); setModal('add') }}>
+            <button className="action-bar-btn action-bar-btn-primary" onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '', needCategory: '' }); setModal('add') }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
               Add Task
             </button>
@@ -586,7 +586,7 @@ export default function JobPage() {
         })}
 
         {canEdit && (
-          <button className="fab" onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '' }); setModal('add') }} aria-label="Add task">
+          <button className="fab" onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '', needCategory: '' }); setModal('add') }} aria-label="Add task">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5"><path d="M12 5v14M5 12h14"/></svg>
           </button>
         )}
@@ -633,7 +633,7 @@ export default function JobPage() {
                     <label className="form-label">What's needed? (optional)</label>
                     <textarea placeholder="e.g. Confirm upper cabinet height with client" value={form.needText} onChange={e => setForm(f => ({ ...f, needText: e.target.value }))} />
                   </div>
-                  {form.needText.trim() && (
+                  {form.needText?.trim() && (
                     <div className="form-group">
                       <label className="form-label">Category</label>
                       <select value={form.needCategory} onChange={e => setForm(f => ({ ...f, needCategory: e.target.value }))}>
