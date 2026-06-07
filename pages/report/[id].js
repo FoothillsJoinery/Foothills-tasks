@@ -17,6 +17,13 @@ function fmtDate(str) {
   return new Date(str).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+const categoryOrder = [
+  'Decision/answer needed from client',
+  'Material not supplied by Foothills Joinery',
+  'Prerequisite task — Foothills Joinery',
+  'Prerequisite task — other contractor',
+]
+
 export default function ReportPage() {
   const router = useRouter()
   const { id } = router.query
@@ -24,6 +31,7 @@ export default function ReportPage() {
   const [needs, setNeeds] = useState([])
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
+  const [hiddenCategories, setHiddenCategories] = useState(new Set())
 
   useEffect(() => {
     if (!id) return
@@ -45,15 +53,35 @@ export default function ReportPage() {
   if (!job) return <div style={{ padding: 32, fontFamily: 'sans-serif', color: '#888' }}>Job not found.</div>
 
   const taskMap = Object.fromEntries(tasks.map(t => [t.id, t.title]))
-  const open = needs.filter(n => !n.resolved_at)
-  const resolved = needs.filter(n => n.resolved_at)
 
-  const categoryOrder = [
-    'Decision/answer needed from client',
-    'Material not supplied by Foothills Joinery',
-    'Prerequisite task — Foothills Joinery',
-    'Prerequisite task — other contractor',
-  ]
+  const presentCategories = categoryOrder.filter(cat => needs.some(n => n.category === cat))
+  const hasUncategorized = needs.some(n => !n.category)
+
+  function toggleCategory(cat) {
+    setHiddenCategories(prev => {
+      const next = new Set(prev)
+      if (next.has(cat)) next.delete(cat); else next.add(cat)
+      return next
+    })
+  }
+
+  function isVisible(need) {
+    const cat = need.category || '__uncategorized__'
+    return !hiddenCategories.has(cat)
+  }
+
+  function sortByCategory(list) {
+    return [...list].sort((a, b) => {
+      const ai = a.category ? categoryOrder.indexOf(a.category) : categoryOrder.length
+      const bi = b.category ? categoryOrder.indexOf(b.category) : categoryOrder.length
+      if (ai !== bi) return ai - bi
+      return new Date(a.created_at) - new Date(b.created_at)
+    })
+  }
+
+  const filteredNeeds = needs.filter(isVisible)
+  const open = sortByCategory(filteredNeeds.filter(n => !n.resolved_at))
+  const resolved = sortByCategory(filteredNeeds.filter(n => n.resolved_at))
 
   function NeedRow({ need }) {
     const isOpen = !need.resolved_at
@@ -104,15 +132,61 @@ export default function ReportPage() {
           </button>
         </div>
 
-        <div style={{ marginBottom: 28 }}>
+        <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
             Needs Report
           </div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{job.name}</h1>
           <div style={{ fontSize: 13, color: '#888780', marginTop: 4 }}>
-            Generated {fmtDate(new Date().toISOString())} · {needs.length} total need{needs.length !== 1 ? 's' : ''} · {open.length} open · {resolved.length} resolved
+            Generated {fmtDate(new Date().toISOString())} · {filteredNeeds.length} of {needs.length} need{needs.length !== 1 ? 's' : ''} · {open.length} open · {resolved.length} resolved
           </div>
         </div>
+
+        {(presentCategories.length > 0 || hasUncategorized) && (
+          <div className="no-print" style={{ marginBottom: 28, padding: '14px 16px', background: '#f8f7f4', borderRadius: 8, border: '1px solid #e8e6df' }}>
+            <div style={{ fontSize: 11, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Filter by category</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {presentCategories.map(cat => {
+                const hidden = hiddenCategories.has(cat)
+                const isFJ = cat === 'Prerequisite task — Foothills Joinery'
+                return (
+                  <button
+                    key={cat}
+                    onClick={() => toggleCategory(cat)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 20,
+                      fontSize: 12,
+                      cursor: 'pointer',
+                      border: '1px solid ' + (hidden ? '#e8e6df' : isFJ ? '#c4966a' : '#b4b2a9'),
+                      background: hidden ? '#fff' : isFJ ? '#fdf0e6' : '#eeecea',
+                      color: hidden ? '#b4b2a9' : '#1a1a18',
+                      textDecoration: hidden ? 'line-through' : 'none',
+                      fontFamily: 'inherit'
+                    }}
+                  >
+                    {cat}
+                  </button>
+                )
+              })}
+              {hasUncategorized && (
+                <button
+                  onClick={() => toggleCategory('__uncategorized__')}
+                  style={{
+                    padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer',
+                    border: '1px solid ' + (hiddenCategories.has('__uncategorized__') ? '#e8e6df' : '#b4b2a9'),
+                    background: hiddenCategories.has('__uncategorized__') ? '#fff' : '#eeecea',
+                    color: hiddenCategories.has('__uncategorized__') ? '#b4b2a9' : '#1a1a18',
+                    textDecoration: hiddenCategories.has('__uncategorized__') ? 'line-through' : 'none',
+                    fontFamily: 'inherit'
+                  }}
+                >
+                  Uncategorized
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {needs.length === 0 && (
           <div style={{ fontSize: 14, color: '#888780' }}>No needs logged for this job.</div>

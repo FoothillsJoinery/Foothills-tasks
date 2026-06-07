@@ -68,7 +68,11 @@ export default function JobPage() {
 
   function userName() {
     if (!user) return 'Unknown'
-    return user.isGuest ? user.email : user.email.split('@')[0]
+    if (!user.isGuest) return 'FJ'
+    const name = user.email.trim()
+    const parts = name.split(/\s+/)
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+    return name.slice(0, 2).toUpperCase()
   }
 
   function userRole() {
