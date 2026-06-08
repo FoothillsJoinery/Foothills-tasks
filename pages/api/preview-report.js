@@ -3,7 +3,7 @@ import { buildWeeklyHtml, supabase } from '../../lib/needs-email'
 export default async function handler(req, res) {
   if (req.method !== 'GET') return res.status(405).end()
 
-  const { job_id, hidden } = req.query
+  const { job_id, hidden, note } = req.query
   if (!job_id) return res.status(400).end()
 
   const { data: job, error } = await supabase.from('jobs').select('*').eq('id', job_id).single()
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
   const sectionMap = Object.fromEntries((secRes.data || []).map(s => [s.id, s]))
   const jobUrl = `${req.headers.origin || 'https://foothillsjoinery.com'}/job/${job_id}`
 
-  const html = buildWeeklyHtml(job, needs, taskMap, jobUrl, sectionMap)
+  const html = buildWeeklyHtml(job, needs, taskMap, jobUrl, sectionMap, note || '')
   res.setHeader('Content-Type', 'text/html')
   res.status(200).send(html)
 }

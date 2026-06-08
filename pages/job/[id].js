@@ -37,6 +37,7 @@ export default function JobPage() {
   const [sendNewEmail, setSendNewEmail] = useState('')
   const [previewHtml, setPreviewHtml] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [sendNote, setSendNote] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -302,6 +303,7 @@ export default function JobPage() {
     setSendRecipients(saved)
     setSendHiddenCats(new Set())
     setSendNewEmail('')
+    setSendNote('')
     setPreviewHtml(null)
     setModal('confirmSend')
   }
@@ -312,6 +314,7 @@ export default function JobPage() {
     try {
       const params = new URLSearchParams({ job_id: id })
       ;[...sendHiddenCats].forEach(c => params.append('hidden', c))
+      if (sendNote.trim()) params.set('note', sendNote.trim())
       const res = await fetch('/api/preview-report?' + params)
       if (res.ok) setPreviewHtml(await res.text())
     } catch {}
@@ -331,7 +334,7 @@ export default function JobPage() {
       const res = await fetch('/api/send-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: id, recipients: finalRecipients, hidden_categories: [...sendHiddenCats] })
+        body: JSON.stringify({ job_id: id, recipients: finalRecipients, hidden_categories: [...sendHiddenCats], note: sendNote.trim() })
       })
       if (res.ok) showToast('Report sent')
       else showToast('Failed to send — check console')
@@ -861,6 +864,17 @@ export default function JobPage() {
                     }}
                   >Add</button>
                 </div>
+              </div>
+
+              {/* Note */}
+              <div style={{ marginBottom: 16 }}>
+                <label className="form-label">Note (optional)</label>
+                <textarea
+                  placeholder="e.g. Hi, here's where things stand heading into next week…"
+                  value={sendNote}
+                  onChange={e => { setSendNote(e.target.value); setPreviewHtml(null) }}
+                  style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid #e8e6df', borderRadius: 8, fontFamily: 'inherit', minHeight: 72, boxSizing: 'border-box', resize: 'vertical' }}
+                />
               </div>
 
               {/* Category filters */}
