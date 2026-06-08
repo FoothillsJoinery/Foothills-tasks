@@ -9,9 +9,10 @@ export default async function handler(req, res) {
   const { data: job, error } = await supabase.from('jobs').select('*').eq('id', job_id).single()
   if (error || !job) return res.status(404).end()
 
-  const [needsRes, tasksRes] = await Promise.all([
+  const [needsRes, tasksRes, secRes] = await Promise.all([
     supabase.from('needs').select('*').eq('job_id', job_id).order('created_at'),
-    supabase.from('tasks').select('id, title').eq('job_id', job_id)
+    supabase.from('tasks').select('id, title, section_id').eq('job_id', job_id),
+    supabase.from('sections').select('*').eq('job_id', job_id)
   ])
 
   const hiddenCategories = new Set(Array.isArray(hidden) ? hidden : hidden ? [hidden] : [])
@@ -19,10 +20,11 @@ export default async function handler(req, res) {
     const cat = n.category || '__uncategorized__'
     return !hiddenCategories.has(cat)
   })
-  const taskMap = Object.fromEntries((tasksRes.data || []).map(t => [t.id, t.title]))
+  const taskMap = Object.fromEntries((tasksRes.data || []).map(t => [t.id, t]))
+  const sectionMap = Object.fromEntries((secRes.data || []).map(s => [s.id, s]))
   const jobUrl = `${req.headers.origin || 'https://foothillsjoinery.com'}/job/${job_id}`
 
-  const html = buildWeeklyHtml(job, needs, taskMap, jobUrl)
+  const html = buildWeeklyHtml(job, needs, taskMap, jobUrl, sectionMap)
   res.setHeader('Content-Type', 'text/html')
   res.status(200).send(html)
 }
