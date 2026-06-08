@@ -33,7 +33,7 @@ export default function ReportPage() {
   const [sections, setSections] = useState([])
   const [loading, setLoading] = useState(true)
   const [hiddenCategories, setHiddenCategories] = useState(new Set())
-  const [sortMode, setSortMode] = useState('category')
+  const [sortMode, setSortMode] = useState('section')
   const [editForm, setEditForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
