@@ -30,6 +30,8 @@ export default function JobPage() {
   const [saving, setSaving] = useState(false)
   const [sending, setSending] = useState(false)
   const [toast, setToast] = useState(null)
+  const [editingEmail, setEditingEmail] = useState(false)
+  const [emailDraft, setEmailDraft] = useState('')
 
   useEffect(() => {
     if (!id) return
@@ -291,8 +293,13 @@ export default function JobPage() {
   }
 
   async function sendReport() {
-    if (!job?.client_email) { showToast('No client email on this job'); return }
+    if (!job?.client_email) { setEmailDraft(''); setEditingEmail(true); setModal('confirmSend'); return }
+    setModal('confirmSend')
+  }
+
+  async function confirmSendReport() {
     setSending(true)
+    setModal(null)
     try {
       const res = await fetch('/api/send-report', {
         method: 'POST',
@@ -305,6 +312,16 @@ export default function JobPage() {
       showToast('Failed to send — check console')
     }
     setSending(false)
+  }
+
+  async function saveClientEmail(email) {
+    const trimmed = email.trim()
+    const { error } = await supabase.from('jobs').update({ client_email: trimmed || null }).eq('id', id)
+    if (!error) {
+      setJob(prev => ({ ...prev, client_email: trimmed || null }))
+      setEditingEmail(false)
+      showToast(trimmed ? 'Client email saved' : 'Client email removed')
+    }
   }
 
   async function toggleEmailEnabled() {
@@ -775,6 +792,49 @@ export default function JobPage() {
           </div>
         )}
 
+        {modal === 'confirmSend' && (
+          <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+            <div className="sheet">
+              <button className="sheet-close" onClick={() => setModal(null)}>×</button>
+              <div className="sheet-title">Send needs report</div>
+              {job?.client_email ? (
+                <>
+                  <p style={{ fontSize: 13, color: '#5f5e5a', marginBottom: 16 }}>
+                    This will send the current needs report to <strong style={{ color: '#1a1a18' }}>{job.client_email}</strong>.
+                  </p>
+                  <button className="submit-btn" onClick={confirmSendReport} disabled={sending}>
+                    {sending ? 'Sending…' : 'Send report'}
+                  </button>
+                  <button
+                    onClick={() => setModal(null)}
+                    style={{ width: '100%', marginTop: 10, padding: 13, background: 'none', border: '1px solid #e8e6df', borderRadius: 8, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 13, color: '#5f5e5a', marginBottom: 12 }}>No client email set. Add one to send the report.</p>
+                  <div style={{ marginBottom: 12 }}>
+                    <input
+                      type="email"
+                      autoFocus
+                      placeholder="client@example.com"
+                      value={emailDraft}
+                      onChange={e => setEmailDraft(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && saveClientEmail(emailDraft).then(() => setModal('confirmSend'))}
+                      style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid #e8e6df', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    />
+                  </div>
+                  <button className="submit-btn" onClick={async () => { await saveClientEmail(emailDraft); setModal('confirmSend') }} disabled={!emailDraft.trim()}>
+                    Save email
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
         {modal === 'share' && (
           <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
             <div className="sheet">
@@ -804,18 +864,42 @@ export default function JobPage() {
 
               <div style={{ borderTop: '1px solid #e8e6df', marginTop: 16, paddingTop: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Automated email reports</div>
+
+                <div style={{ marginBottom: 12 }}>
+                  {editingEmail ? (
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      <input
+                        type="email"
+                        autoFocus
+                        placeholder="client@example.com"
+                        value={emailDraft}
+                        onChange={e => setEmailDraft(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && saveClientEmail(emailDraft)}
+                        style={{ flex: 1, padding: '8px 10px', fontSize: 13, border: '1px solid #e8e6df', borderRadius: 6, fontFamily: 'inherit' }}
+                      />
+                      <button className="share-btn" onClick={() => saveClientEmail(emailDraft)}>Save</button>
+                      <button className="share-btn" onClick={() => setEditingEmail(false)} style={{ background: 'none' }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ flex: 1, fontSize: 13, color: job?.client_email ? '#1a1a18' : '#b4b2a9' }}>
+                        {job?.client_email || 'No client email set'}
+                      </div>
+                      <button className="share-btn" onClick={() => { setEmailDraft(job?.client_email || ''); setEditingEmail(true) }}>
+                        {job?.client_email ? 'Edit' : 'Add email'}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="share-sheet-row" style={{ alignItems: 'center' }}>
                   <div className="share-sheet-info">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={job?.email_enabled ? '#1a8a4a' : '#888780'} strokeWidth="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                     <div>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a18' }}>
-                        {job?.email_enabled ? 'Emails on' : 'Emails off'}
+                        {job?.email_enabled ? 'Auto emails on' : 'Auto emails off'}
                       </div>
-                      <div style={{ fontSize: 12, color: '#888780' }}>
-                        {job?.client_email
-                          ? `Weekly + daily digest to ${job.client_email}`
-                          : 'No client email set on this job'}
-                      </div>
+                      <div style={{ fontSize: 12, color: '#888780' }}>Weekly + daily digest</div>
                     </div>
                   </div>
                   <button
