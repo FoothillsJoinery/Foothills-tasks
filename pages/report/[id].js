@@ -33,6 +33,7 @@ export default function ReportPage() {
   const [sections, setSections] = useState([])
   const [loading, setLoading] = useState(true)
   const [hiddenCategories, setHiddenCategories] = useState(new Set())
+  const [sortMode, setSortMode] = useState('category')
   const [editForm, setEditForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
@@ -108,8 +109,27 @@ export default function ReportPage() {
     return !hiddenCategories.has(cat)
   }
 
-  function sortByCategory(list) {
+  function sectionSortKey(need) {
+    const task = taskMap[need.task_id]
+    if (!task?.section_id) return { parentIdx: Infinity, subIdx: Infinity }
+    const sec = sectionMap[task.section_id]
+    if (!sec) return { parentIdx: Infinity, subIdx: Infinity }
+    const parentId = sec.parent_id || sec.id
+    const parentIdx = sections.filter(s => !s.parent_id).findIndex(s => s.id === parentId)
+    const subIdx = sec.parent_id ? sections.filter(s => s.parent_id === parentId).findIndex(s => s.id === sec.id) : -1
+    return { parentIdx, subIdx }
+  }
+
+  function sortNeeds(list) {
     return [...list].sort((a, b) => {
+      if (sortMode === 'date') return new Date(a.created_at) - new Date(b.created_at)
+      if (sortMode === 'section') {
+        const ak = sectionSortKey(a), bk = sectionSortKey(b)
+        if (ak.parentIdx !== bk.parentIdx) return ak.parentIdx - bk.parentIdx
+        if (ak.subIdx !== bk.subIdx) return ak.subIdx - bk.subIdx
+        return new Date(a.created_at) - new Date(b.created_at)
+      }
+      // category (default)
       const ai = a.category ? categoryOrder.indexOf(a.category) : categoryOrder.length
       const bi = b.category ? categoryOrder.indexOf(b.category) : categoryOrder.length
       if (ai !== bi) return ai - bi
@@ -118,8 +138,69 @@ export default function ReportPage() {
   }
 
   const filteredNeeds = needs.filter(isVisible)
-  const open = sortByCategory(filteredNeeds.filter(n => !n.resolved_at))
-  const resolved = sortByCategory(filteredNeeds.filter(n => n.resolved_at))
+  const open = sortNeeds(filteredNeeds.filter(n => !n.resolved_at))
+  const resolved = sortNeeds(filteredNeeds.filter(n => n.resolved_at))
+
+  function groupHeader(label, colSpan) {
+    return (
+      <tr key={'grp-' + label}>
+        <td colSpan={colSpan} style={{ padding: '10px 10px 4px', fontSize: 11, fontWeight: 700, color: '#5f5e5a', textTransform: 'uppercase', letterSpacing: '0.05em', background: '#f8f7f4', borderBottom: '1px solid #e8e6df' }}>
+          {label}
+        </td>
+      </tr>
+    )
+  }
+
+  function NeedsTable({ needs, timeLabel }) {
+    const colSpan = 9
+    const rows = []
+    if (sortMode === 'section') {
+      let lastPath = undefined
+      needs.forEach(n => {
+        const task = taskMap[n.task_id]
+        const path = task ? sectionPath(task.section_id) : null
+        const label = path || 'No section'
+        if (label !== lastPath) {
+          rows.push(groupHeader(label, colSpan))
+          lastPath = label
+        }
+        rows.push(<NeedRow key={n.id} need={n} />)
+      })
+    } else if (sortMode === 'category') {
+      let lastCat = undefined
+      needs.forEach(n => {
+        const cat = n.category || 'Uncategorized'
+        if (cat !== lastCat) {
+          rows.push(groupHeader(cat, colSpan))
+          lastCat = cat
+        }
+        rows.push(<NeedRow key={n.id} need={n} />)
+      })
+    } else {
+      needs.forEach(n => rows.push(<NeedRow key={n.id} need={n} />))
+    }
+
+    return (
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              {thSort('section', 'Task')}
+              <th style={th}>What's needed</th>
+              {thSort('category', 'Category')}
+              <th style={th}>Logged by</th>
+              {thSort('date', 'Logged')}
+              <th style={th}>Resolved</th>
+              <th style={th}>{timeLabel}</th>
+              <th style={th}>Answer</th>
+              <th style={th} className="no-print"></th>
+            </tr>
+          </thead>
+          <tbody>{rows}</tbody>
+        </table>
+      </div>
+    )
+  }
 
   function NeedRow({ need }) {
     const isOpen = !need.resolved_at
@@ -161,6 +242,14 @@ export default function ReportPage() {
 
   const td = { padding: '8px 10px', fontSize: 12, verticalAlign: 'top', color: '#1a1a18' }
   const th = { padding: '8px 10px', fontSize: 11, fontWeight: 600, textAlign: 'left', color: '#5f5e5a', borderBottom: '2px solid #1a1a18', whiteSpace: 'nowrap' }
+  const thSort = (mode, label) => (
+    <th
+      style={{ ...th, cursor: 'pointer', userSelect: 'none', color: sortMode === mode ? '#1a1a18' : '#5f5e5a' }}
+      onClick={() => setSortMode(mode)}
+    >
+      {label}{sortMode === mode ? ' ↑' : ''}
+    </th>
+  )
 
   return (
     <>
@@ -255,26 +344,7 @@ export default function ReportPage() {
             <h2 style={{ fontSize: 14, fontWeight: 700, color: '#993c1d', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Open ({open.length})
             </h2>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={th}>Task</th>
-                    <th style={th}>What's needed</th>
-                    <th style={th}>Category</th>
-                    <th style={th}>Logged by</th>
-                    <th style={th}>Logged</th>
-                    <th style={th}>Resolved</th>
-                    <th style={th}>Time open</th>
-                    <th style={th}>Answer</th>
-                    <th style={th} className="no-print"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {open.map(n => <NeedRow key={n.id} need={n} />)}
-                </tbody>
-              </table>
-            </div>
+            <NeedsTable needs={open} timeLabel="Time open" />
           </div>
         )}
 
@@ -283,26 +353,7 @@ export default function ReportPage() {
             <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a8a4a', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Resolved ({resolved.length})
             </h2>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>
-                    <th style={th}>Task</th>
-                    <th style={th}>What's needed</th>
-                    <th style={th}>Category</th>
-                    <th style={th}>Logged by</th>
-                    <th style={th}>Logged</th>
-                    <th style={th}>Resolved</th>
-                    <th style={th}>Time to resolve</th>
-                    <th style={th}>Answer</th>
-                    <th style={th} className="no-print"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {resolved.map(n => <NeedRow key={n.id} need={n} />)}
-                </tbody>
-              </table>
-            </div>
+            <NeedsTable needs={resolved} timeLabel="Time to resolve" />
           </div>
         )}
 
