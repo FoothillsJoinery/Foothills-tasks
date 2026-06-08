@@ -194,7 +194,7 @@ export default function ReportPage() {
   function groupHeader(label, colSpan) {
     return (
       <tr key={'grp-' + label}>
-        <td colSpan={colSpan} style={{ padding: '10px 10px 4px', fontSize: 11, fontWeight: 700, color: '#5f5e5a', textTransform: 'uppercase', letterSpacing: '0.05em', background: '#f8f7f4', borderBottom: '1px solid #e8e6df' }}>
+        <td colSpan={colSpan} style={{ padding: '10px 10px 4px', fontSize: 11, fontWeight: 700, color: '#5f5e5a', textTransform: 'uppercase', letterSpacing: '0.05em', background: '#f8f7f4', borderBottom: '1px solid #e8e6df', position: 'sticky', top: 0, zIndex: 1 }}>
           {label}
         </td>
       </tr>
@@ -202,7 +202,7 @@ export default function ReportPage() {
   }
 
   function NeedsTable({ needs, timeLabel }) {
-    const colSpan = 9
+    const colSpan = 6
     const rows = []
     if (sortMode === 'section') {
       let lastPath = undefined
@@ -238,11 +238,8 @@ export default function ReportPage() {
               {thSort('section', 'Task')}
               <th style={th}>What's needed</th>
               {thSort('category', 'Category')}
-              <th style={th}>Logged by</th>
               {thSort('date', 'Logged')}
-              <th style={th}>Resolved</th>
               <th style={th}>{timeLabel}</th>
-              <th style={th}>Answer</th>
               <th style={th} className="no-print"></th>
             </tr>
           </thead>
@@ -271,13 +268,10 @@ export default function ReportPage() {
         </td>
         <td style={td}>{need.text}</td>
         <td style={td}>{need.category || '—'}</td>
-        <td style={td}>{need.requested_by}</td>
         <td style={td}>{fmtDate(need.created_at)}</td>
-        <td style={td}>{fmtDate(need.resolved_at)}</td>
         <td style={{ ...td, color: isOpen ? '#993c1d' : '#1a8a4a', fontWeight: 600 }}>
           {isOpen ? `Open (${durationStr(need.created_at, null)})` : durationStr(need.created_at, need.resolved_at)}
         </td>
-        <td style={td}>{need.answer || '—'}</td>
         <td style={{ ...td, whiteSpace: 'nowrap' }} className="no-print">
           <button
             onClick={() => setEditForm({ id: need.id, text: need.text, category: need.category || '' })}
@@ -291,7 +285,7 @@ export default function ReportPage() {
   }
 
   const td = { padding: '8px 10px', fontSize: 12, verticalAlign: 'top', color: '#1a1a18' }
-  const th = { padding: '8px 10px', fontSize: 11, fontWeight: 600, textAlign: 'left', color: '#5f5e5a', borderBottom: '2px solid #1a1a18', whiteSpace: 'nowrap' }
+  const th = { padding: '8px 10px', fontSize: 11, fontWeight: 600, textAlign: 'left', color: '#5f5e5a', borderBottom: '2px solid #1a1a18', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }
   const thSort = (mode, label) => (
     <th
       style={{ ...th, cursor: 'pointer', userSelect: 'none', color: sortMode === mode ? '#1a1a18' : '#5f5e5a' }}
