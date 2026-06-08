@@ -37,10 +37,60 @@ export default function ReportPage() {
   const [editForm, setEditForm] = useState(null)
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState(null)
+  const [sendModal, setSendModal] = useState(false)
+  const [sendRecipients, setSendRecipients] = useState([])
+  const [sendNewEmail, setSendNewEmail] = useState('')
+  const [sendNote, setSendNote] = useState('')
+  const [sending, setSending] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   function showToast(msg) {
     setToast(msg)
     setTimeout(() => setToast(null), 2200)
+  }
+
+  function openSendModal() {
+    const saved = job?.client_email ? job.client_email.split(',').map(e => e.trim()).filter(Boolean) : []
+    setSendRecipients(saved)
+    setSendNewEmail('')
+    setSendNote('')
+    setPreviewHtml(null)
+    setSendModal(true)
+  }
+
+  async function loadPreview() {
+    setPreviewLoading(true)
+    setPreviewHtml(null)
+    try {
+      const params = new URLSearchParams({ job_id: id })
+      ;[...hiddenCategories].forEach(c => params.append('hidden', c))
+      if (sendNote.trim()) params.set('note', sendNote.trim())
+      const res = await fetch('/api/preview-report?' + params)
+      if (res.ok) setPreviewHtml(await res.text())
+    } catch {}
+    setPreviewLoading(false)
+  }
+
+  async function confirmSend() {
+    const finalRecipients = sendNewEmail.trim()
+      ? [...new Set([...sendRecipients, sendNewEmail.trim()])]
+      : sendRecipients
+    if (finalRecipients.length === 0) { showToast('Add at least one recipient'); return }
+    setSendRecipients(finalRecipients)
+    setSendNewEmail('')
+    setSending(true)
+    setSendModal(false)
+    try {
+      const res = await fetch('/api/send-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ job_id: id, recipients: finalRecipients, hidden_categories: [...hiddenCategories], note: sendNote.trim() })
+      })
+      if (res.ok) showToast('Report sent')
+      else showToast('Failed to send')
+    } catch { showToast('Failed to send') }
+    setSending(false)
   }
 
   async function saveEditNeed() {
@@ -273,10 +323,22 @@ export default function ReportPage() {
           </button>
           <button
             onClick={() => window.print()}
-            style={{ padding: '8px 14px', background: '#1a1a18', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
+            style={{ padding: '8px 14px', background: 'none', border: '1px solid #e8e6df', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
           >
             Print / Save as PDF
           </button>
+          <button
+            onClick={openSendModal}
+            disabled={sending}
+            style={{ padding: '8px 14px', background: '#1a1a18', color: 'white', border: 'none', borderRadius: 6, cursor: 'pointer', fontSize: 13 }}
+          >
+            {sending ? 'Sending…' : 'Send this report'}
+          </button>
+          {hiddenCategories.size > 0 && (
+            <span style={{ fontSize: 12, color: '#854f0b', background: '#fdf0e6', padding: '4px 10px', borderRadius: 20, border: '1px solid #f0d9b5' }}>
+              {hiddenCategories.size} categor{hiddenCategories.size === 1 ? 'y' : 'ies'} filtered
+            </span>
+          )}
         </div>
 
         <div style={{ marginBottom: 20 }}>
@@ -397,6 +459,67 @@ export default function ReportPage() {
           </div>
         )}
       </div>
+
+      {sendModal && (
+        <div onClick={e => { if (e.target === e.currentTarget) setSendModal(false) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 24, width: '100%', maxWidth: 500, maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <button onClick={() => setSendModal(false)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888780' }}>×</button>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>Send this report</div>
+            {hiddenCategories.size > 0 && (
+              <div style={{ fontSize: 12, color: '#854f0b', marginBottom: 16 }}>Sending with {hiddenCategories.size} categor{hiddenCategories.size === 1 ? 'y' : 'ies'} filtered out — matches what you see on screen.</div>
+            )}
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#5f5e5a' }}>Recipients</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {sendRecipients.map(email => (
+                  <span key={email} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: '#eeecea', borderRadius: 20, fontSize: 12 }}>
+                    {email}
+                    <button onClick={() => setSendRecipients(prev => prev.filter(e => e !== email))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888780', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                  </span>
+                ))}
+                {sendRecipients.length === 0 && <span style={{ fontSize: 12, color: '#b4b2a9' }}>No recipients yet</span>}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="email"
+                  placeholder="Add email address"
+                  value={sendNewEmail}
+                  onChange={e => setSendNewEmail(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && sendNewEmail.trim()) { setSendRecipients(prev => [...new Set([...prev, sendNewEmail.trim()])]); setSendNewEmail('') } }}
+                  style={{ flex: 1, padding: '8px 10px', fontSize: 13, border: '1px solid #e8e6df', borderRadius: 6, fontFamily: 'inherit' }}
+                />
+                <button onClick={() => { if (sendNewEmail.trim()) { setSendRecipients(prev => [...new Set([...prev, sendNewEmail.trim()])]); setSendNewEmail('') } }} style={{ padding: '8px 14px', fontSize: 13, background: '#eeecea', border: '1px solid #e8e6df', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}>Add</button>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 6, color: '#5f5e5a' }}>Note (optional)</label>
+              <textarea
+                placeholder="e.g. Hi, here's where things stand heading into next week…"
+                value={sendNote}
+                onChange={e => { setSendNote(e.target.value); setPreviewHtml(null) }}
+                style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid #e8e6df', borderRadius: 8, fontFamily: 'inherit', minHeight: 72, boxSizing: 'border-box', resize: 'vertical' }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <button onClick={loadPreview} disabled={previewLoading} style={{ padding: '8px 14px', fontSize: 13, background: 'none', border: '1px solid #e8e6df', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}>
+                {previewLoading ? 'Loading…' : previewHtml ? 'Refresh preview' : 'Preview email'}
+              </button>
+              {previewHtml && (
+                <div style={{ marginTop: 10, border: '1px solid #e8e6df', borderRadius: 8, overflow: 'hidden' }}>
+                  <iframe srcDoc={previewHtml} style={{ width: '100%', height: 320, border: 'none' }} title="Email preview" />
+                </div>
+              )}
+            </div>
+
+            <button onClick={confirmSend} disabled={sending || sendRecipients.length === 0} style={{ width: '100%', padding: 13, background: '#1a1a18', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>
+              {sending ? 'Sending…' : `Send to ${sendRecipients.length} recipient${sendRecipients.length !== 1 ? 's' : ''}`}
+            </button>
+          </div>
+        </div>
+      )}
 
       {editForm && (
         <div onClick={e => { if (e.target === e.currentTarget) setEditForm(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 }}>
