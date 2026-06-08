@@ -30,6 +30,7 @@ export default function ReportPage() {
   const [job, setJob] = useState(null)
   const [needs, setNeeds] = useState([])
   const [tasks, setTasks] = useState([])
+  const [sections, setSections] = useState([])
   const [loading, setLoading] = useState(true)
   const [hiddenCategories, setHiddenCategories] = useState(new Set())
   const [editForm, setEditForm] = useState(null)
@@ -59,14 +60,16 @@ export default function ReportPage() {
   useEffect(() => {
     if (!id) return
     async function load() {
-      const [jobRes, taskRes, needRes] = await Promise.all([
+      const [jobRes, taskRes, needRes, secRes] = await Promise.all([
         supabase.from('jobs').select('*').eq('id', id).single(),
-        supabase.from('tasks').select('id, title').eq('job_id', id),
-        supabase.from('needs').select('*').eq('job_id', id).order('created_at')
+        supabase.from('tasks').select('id, title, section_id').eq('job_id', id),
+        supabase.from('needs').select('*').eq('job_id', id).order('created_at'),
+        supabase.from('sections').select('*').eq('job_id', id)
       ])
       if (jobRes.data) setJob(jobRes.data)
       setTasks(taskRes.data || [])
       setNeeds(needRes.data || [])
+      setSections(secRes.data || [])
       setLoading(false)
     }
     load()
@@ -75,7 +78,19 @@ export default function ReportPage() {
   if (loading) return <div style={{ padding: 32, fontFamily: 'sans-serif', color: '#888' }}>Loading...</div>
   if (!job) return <div style={{ padding: 32, fontFamily: 'sans-serif', color: '#888' }}>Job not found.</div>
 
-  const taskMap = Object.fromEntries(tasks.map(t => [t.id, t.title]))
+  const taskMap = Object.fromEntries(tasks.map(t => [t.id, t]))
+  const sectionMap = Object.fromEntries(sections.map(s => [s.id, s]))
+
+  function sectionPath(sectionId) {
+    if (!sectionId) return null
+    const sec = sectionMap[sectionId]
+    if (!sec) return null
+    if (sec.parent_id) {
+      const parent = sectionMap[sec.parent_id]
+      return parent ? `${parent.name} › ${sec.name}` : sec.name
+    }
+    return sec.name
+  }
 
   const presentCategories = categoryOrder.filter(cat => needs.some(n => n.category === cat))
   const hasUncategorized = needs.some(n => !n.category)
@@ -110,7 +125,19 @@ export default function ReportPage() {
     const isOpen = !need.resolved_at
     return (
       <tr style={{ borderBottom: '1px solid #e8e6df', pageBreakInside: 'avoid' }}>
-        <td style={td}>{taskMap[need.task_id] || '—'}</td>
+        <td style={td}>
+          {(() => {
+            const task = taskMap[need.task_id]
+            if (!task) return '—'
+            const path = sectionPath(task.section_id)
+            return (
+              <>
+                {path && <div style={{ fontSize: 11, color: '#888780', marginBottom: 2 }}>{path}</div>}
+                {task.title}
+              </>
+            )
+          })()}
+        </td>
         <td style={td}>{need.text}</td>
         <td style={td}>{need.category || '—'}</td>
         <td style={td}>{need.requested_by}</td>
