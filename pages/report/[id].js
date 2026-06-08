@@ -201,8 +201,8 @@ export default function ReportPage() {
     )
   }
 
-  function NeedsTable({ needs, timeLabel }) {
-    const colSpan = 6
+  function NeedsTable({ needs }) {
+    const colSpan = 5
     const rows = []
     if (sortMode === 'section') {
       let lastPath = undefined
@@ -239,7 +239,6 @@ export default function ReportPage() {
               <th style={th}>What's needed</th>
               {thSort('category', 'Category')}
               {thSort('date', 'Logged')}
-              <th style={th}>{timeLabel}</th>
               <th style={th} className="no-print"></th>
             </tr>
           </thead>
@@ -269,9 +268,6 @@ export default function ReportPage() {
         <td style={td}>{need.text}</td>
         <td style={td}>{need.category || '—'}</td>
         <td style={td}>{fmtDate(need.created_at)}</td>
-        <td style={{ ...td, color: isOpen ? '#993c1d' : '#1a8a4a', fontWeight: 600 }}>
-          {isOpen ? `Open (${durationStr(need.created_at, null)})` : durationStr(need.created_at, need.resolved_at)}
-        </td>
         <td style={{ ...td, whiteSpace: 'nowrap' }} className="no-print">
           <button
             onClick={() => setEditForm({ id: need.id, text: need.text, category: need.category || '' })}
@@ -400,7 +396,7 @@ export default function ReportPage() {
             <h2 style={{ fontSize: 14, fontWeight: 700, color: '#993c1d', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Open ({open.length})
             </h2>
-            <NeedsTable needs={open} timeLabel="Time open" />
+            <NeedsTable needs={open} />
           </div>
         )}
 
@@ -409,7 +405,7 @@ export default function ReportPage() {
             <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a8a4a', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Resolved ({resolved.length})
             </h2>
-            <NeedsTable needs={resolved} timeLabel="Time to resolve" />
+            <NeedsTable needs={resolved} />
           </div>
         )}
 
