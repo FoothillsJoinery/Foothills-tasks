@@ -32,6 +32,29 @@ export default function ReportPage() {
   const [tasks, setTasks] = useState([])
   const [loading, setLoading] = useState(true)
   const [hiddenCategories, setHiddenCategories] = useState(new Set())
+  const [editForm, setEditForm] = useState(null)
+  const [saving, setSaving] = useState(false)
+  const [toast, setToast] = useState(null)
+
+  function showToast(msg) {
+    setToast(msg)
+    setTimeout(() => setToast(null), 2200)
+  }
+
+  async function saveEditNeed() {
+    if (!editForm?.text?.trim()) return
+    setSaving(true)
+    const { data, error } = await supabase.from('needs')
+      .update({ text: editForm.text.trim(), category: editForm.category || null })
+      .eq('id', editForm.id)
+      .select().single()
+    setSaving(false)
+    if (!error && data) {
+      setNeeds(prev => prev.map(n => n.id === data.id ? data : n))
+      setEditForm(null)
+      showToast('Need updated')
+    }
+  }
 
   useEffect(() => {
     if (!id) return
@@ -97,6 +120,14 @@ export default function ReportPage() {
           {isOpen ? `Open (${durationStr(need.created_at, null)})` : durationStr(need.created_at, need.resolved_at)}
         </td>
         <td style={td}>{need.answer || '—'}</td>
+        <td style={{ ...td, whiteSpace: 'nowrap' }} className="no-print">
+          <button
+            onClick={() => setEditForm({ id: need.id, text: need.text, category: need.category || '' })}
+            style={{ padding: '3px 10px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid #e8e6df', borderRadius: 4, color: '#5f5e5a', fontFamily: 'inherit' }}
+          >
+            Edit
+          </button>
+        </td>
       </tr>
     )
   }
@@ -209,6 +240,7 @@ export default function ReportPage() {
                     <th style={th}>Resolved</th>
                     <th style={th}>Time open</th>
                     <th style={th}>Answer</th>
+                    <th style={th} className="no-print"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -236,6 +268,7 @@ export default function ReportPage() {
                     <th style={th}>Resolved</th>
                     <th style={th}>Time to resolve</th>
                     <th style={th}>Answer</th>
+                    <th style={th} className="no-print"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -286,6 +319,51 @@ export default function ReportPage() {
           </div>
         )}
       </div>
+
+      {editForm && (
+        <div onClick={e => { if (e.target === e.currentTarget) setEditForm(null) }} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 100 }}>
+          <div style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: 24, width: '100%', maxWidth: 500 }}>
+            <button onClick={() => setEditForm(null)} style={{ position: 'absolute', top: 16, right: 16, background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#888780' }}>×</button>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Edit need</div>
+            <div style={{ marginBottom: 12 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4, color: '#5f5e5a' }}>What's needed</label>
+              <textarea
+                autoFocus
+                value={editForm.text}
+                onChange={e => setEditForm(f => ({ ...f, text: e.target.value }))}
+                style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid #e8e6df', borderRadius: 8, fontFamily: 'inherit', minHeight: 80, boxSizing: 'border-box' }}
+              />
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 4, color: '#5f5e5a' }}>Category</label>
+              <select
+                value={editForm.category}
+                onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid #e8e6df', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }}
+              >
+                <option value="">— Select a category —</option>
+                <option>Decision/answer needed from client</option>
+                <option>Material not supplied by Foothills Joinery</option>
+                <option>Prerequisite task — Foothills Joinery</option>
+                <option>Prerequisite task — other contractor</option>
+              </select>
+            </div>
+            <button
+              onClick={saveEditNeed}
+              disabled={saving}
+              style={{ width: '100%', padding: 13, background: '#1a1a18', color: '#fff', border: 'none', borderRadius: 8, fontSize: 15, fontWeight: 600, cursor: saving ? 'not-allowed' : 'pointer', fontFamily: 'inherit' }}
+            >
+              {saving ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: '#1a1a18', color: '#fff', padding: '10px 20px', borderRadius: 8, fontSize: 13, zIndex: 200 }}>
+          {toast}
+        </div>
+      )}
     </>
   )
 }
