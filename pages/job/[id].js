@@ -319,14 +319,19 @@ export default function JobPage() {
   }
 
   async function confirmSendReport() {
-    if (sendRecipients.length === 0) { showToast('Add at least one recipient'); return }
+    const finalRecipients = sendNewEmail.trim()
+      ? [...new Set([...sendRecipients, sendNewEmail.trim()])]
+      : sendRecipients
+    if (finalRecipients.length === 0) { showToast('Add at least one recipient'); return }
+    setSendRecipients(finalRecipients)
+    setSendNewEmail('')
     setSending(true)
     setModal(null)
     try {
       const res = await fetch('/api/send-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: id, recipients: sendRecipients, hidden_categories: [...sendHiddenCats] })
+        body: JSON.stringify({ job_id: id, recipients: finalRecipients, hidden_categories: [...sendHiddenCats] })
       })
       if (res.ok) showToast('Report sent')
       else showToast('Failed to send — check console')
