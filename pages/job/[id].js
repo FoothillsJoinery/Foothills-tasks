@@ -32,6 +32,11 @@ export default function JobPage() {
   const [toast, setToast] = useState(null)
   const [editingEmail, setEditingEmail] = useState(false)
   const [emailDraft, setEmailDraft] = useState('')
+  const [sendRecipients, setSendRecipients] = useState([])
+  const [sendHiddenCats, setSendHiddenCats] = useState(new Set())
+  const [sendNewEmail, setSendNewEmail] = useState('')
+  const [previewHtml, setPreviewHtml] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   useEffect(() => {
     if (!id) return
@@ -292,23 +297,40 @@ export default function JobPage() {
     setTimeout(() => setToast(null), 2200)
   }
 
-  async function sendReport() {
-    if (!job?.client_email) { setEmailDraft(''); setEditingEmail(true); setModal('confirmSend'); return }
+  function openSendModal() {
+    const saved = job?.client_email ? job.client_email.split(',').map(e => e.trim()).filter(Boolean) : []
+    setSendRecipients(saved)
+    setSendHiddenCats(new Set())
+    setSendNewEmail('')
+    setPreviewHtml(null)
     setModal('confirmSend')
   }
 
+  async function loadPreview() {
+    setPreviewLoading(true)
+    setPreviewHtml(null)
+    try {
+      const params = new URLSearchParams({ job_id: id })
+      ;[...sendHiddenCats].forEach(c => params.append('hidden', c))
+      const res = await fetch('/api/preview-report?' + params)
+      if (res.ok) setPreviewHtml(await res.text())
+    } catch {}
+    setPreviewLoading(false)
+  }
+
   async function confirmSendReport() {
+    if (sendRecipients.length === 0) { showToast('Add at least one recipient'); return }
     setSending(true)
     setModal(null)
     try {
       const res = await fetch('/api/send-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: id })
+        body: JSON.stringify({ job_id: id, recipients: sendRecipients, hidden_categories: [...sendHiddenCats] })
       })
-      if (res.ok) showToast('Report sent to client')
+      if (res.ok) showToast('Report sent')
       else showToast('Failed to send — check console')
-    } catch (e) {
+    } catch {
       showToast('Failed to send — check console')
     }
     setSending(false)
@@ -482,7 +504,7 @@ export default function JobPage() {
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                 Report
               </button>
-              <button className="share-icon-btn" onClick={sendReport} disabled={sending} aria-label="Send report">
+              <button className="share-icon-btn" onClick={openSendModal} disabled={sending} aria-label="Send report">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                 {sending ? 'Sending…' : 'Send'}
               </button>
@@ -794,43 +816,103 @@ export default function JobPage() {
 
         {modal === 'confirmSend' && (
           <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
-            <div className="sheet">
+            <div className="sheet" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
               <button className="sheet-close" onClick={() => setModal(null)}>×</button>
               <div className="sheet-title">Send needs report</div>
-              {job?.client_email ? (
-                <>
-                  <p style={{ fontSize: 13, color: '#5f5e5a', marginBottom: 16 }}>
-                    This will send the current needs report to <strong style={{ color: '#1a1a18' }}>{job.client_email}</strong>.
-                  </p>
-                  <button className="submit-btn" onClick={confirmSendReport} disabled={sending}>
-                    {sending ? 'Sending…' : 'Send report'}
-                  </button>
+
+              {/* Recipients */}
+              <div style={{ marginBottom: 16 }}>
+                <label className="form-label">Recipients</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                  {sendRecipients.map(email => (
+                    <span key={email} style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', background: '#eeecea', borderRadius: 20, fontSize: 12 }}>
+                      {email}
+                      <button onClick={() => setSendRecipients(prev => prev.filter(e => e !== email))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#888780', fontSize: 14, lineHeight: 1, padding: 0 }}>×</button>
+                    </span>
+                  ))}
+                  {sendRecipients.length === 0 && <span style={{ fontSize: 12, color: '#b4b2a9' }}>No recipients yet</span>}
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input
+                    type="email"
+                    placeholder="Add email address"
+                    value={sendNewEmail}
+                    onChange={e => setSendNewEmail(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' && sendNewEmail.trim()) {
+                        setSendRecipients(prev => [...new Set([...prev, sendNewEmail.trim()])])
+                        setSendNewEmail('')
+                      }
+                    }}
+                    style={{ flex: 1, padding: '8px 10px', fontSize: 13, border: '1px solid #e8e6df', borderRadius: 6, fontFamily: 'inherit' }}
+                  />
                   <button
-                    onClick={() => setModal(null)}
-                    style={{ width: '100%', marginTop: 10, padding: 13, background: 'none', border: '1px solid #e8e6df', borderRadius: 8, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p style={{ fontSize: 13, color: '#5f5e5a', marginBottom: 12 }}>No client email set. Add one to send the report.</p>
-                  <div style={{ marginBottom: 12 }}>
-                    <input
-                      type="email"
-                      autoFocus
-                      placeholder="client@example.com"
-                      value={emailDraft}
-                      onChange={e => setEmailDraft(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && saveClientEmail(emailDraft).then(() => setModal('confirmSend'))}
-                      style={{ width: '100%', padding: '10px 12px', fontSize: 14, border: '1px solid #e8e6df', borderRadius: 8, fontFamily: 'inherit', boxSizing: 'border-box' }}
+                    className="share-btn"
+                    onClick={() => {
+                      if (sendNewEmail.trim()) {
+                        setSendRecipients(prev => [...new Set([...prev, sendNewEmail.trim()])])
+                        setSendNewEmail('')
+                      }
+                    }}
+                  >Add</button>
+                </div>
+              </div>
+
+              {/* Category filters */}
+              <div style={{ marginBottom: 16 }}>
+                <label className="form-label">Include categories</label>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {[
+                    'Decision/answer needed from client',
+                    'Material not supplied by Foothills Joinery',
+                    'Prerequisite task — Foothills Joinery',
+                    'Prerequisite task — other contractor',
+                    '__uncategorized__'
+                  ].map(cat => {
+                    const label = cat === '__uncategorized__' ? 'Uncategorized' : cat
+                    const included = !sendHiddenCats.has(cat)
+                    return (
+                      <label key={cat} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={included}
+                          onChange={() => setSendHiddenCats(prev => {
+                            const next = new Set(prev)
+                            if (next.has(cat)) next.delete(cat); else next.add(cat)
+                            setPreviewHtml(null)
+                            return next
+                          })}
+                        />
+                        {label}
+                      </label>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Preview */}
+              <div style={{ marginBottom: 16 }}>
+                <button
+                  onClick={loadPreview}
+                  disabled={previewLoading}
+                  style={{ padding: '8px 14px', fontSize: 13, background: 'none', border: '1px solid #e8e6df', borderRadius: 6, cursor: 'pointer', fontFamily: 'inherit' }}
+                >
+                  {previewLoading ? 'Loading preview…' : previewHtml ? 'Refresh preview' : 'Preview email'}
+                </button>
+                {previewHtml && (
+                  <div style={{ marginTop: 10, border: '1px solid #e8e6df', borderRadius: 8, overflow: 'hidden' }}>
+                    <iframe
+                      srcDoc={previewHtml}
+                      style={{ width: '100%', height: 320, border: 'none' }}
+                      title="Email preview"
                     />
                   </div>
-                  <button className="submit-btn" onClick={async () => { await saveClientEmail(emailDraft); setModal('confirmSend') }} disabled={!emailDraft.trim()}>
-                    Save email
-                  </button>
-                </>
-              )}
+                )}
+              </div>
+
+              <button className="submit-btn" onClick={confirmSendReport} disabled={sending || sendRecipients.length === 0}>
+                {sending ? 'Sending…' : `Send to ${sendRecipients.length} recipient${sendRecipients.length !== 1 ? 's' : ''}`}
+              </button>
             </div>
           </div>
         )}
