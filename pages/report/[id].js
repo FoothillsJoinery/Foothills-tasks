@@ -450,31 +450,31 @@ export default function ReportPage() {
             <table style={{ width: 'auto', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={th}>Category</th>
-                  <th style={{ ...th, textAlign: 'right' }}>Total</th>
-                  <th style={{ ...th, textAlign: 'right', color: '#993c1d' }}>Open</th>
-                  <th style={{ ...th, textAlign: 'right', color: '#1a8a4a' }}>Resolved</th>
+                  {['Category','Total','Open','Resolved'].map((h, i) => (
+                    <th key={h} style={{ padding: '8px 12px', fontSize: 11, fontWeight: 600, textAlign: i === 0 ? 'left' : 'right', color: i === 2 ? '#993c1d' : i === 3 ? '#1a8a4a' : '#5f5e5a', borderBottom: '2px solid #1a1a18', whiteSpace: 'nowrap' }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {categoryOrder.map(cat => {
                   const catNeeds = needs.filter(n => n.category === cat)
                   if (catNeeds.length === 0) return null
+                  const c = catColors[cat]
                   return (
                     <tr key={cat} style={{ borderBottom: '1px solid #e8e6df' }}>
-                      <td style={td}>{cat}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{catNeeds.length}</td>
-                      <td style={{ ...td, textAlign: 'right', color: '#993c1d' }}>{catNeeds.filter(n => !n.resolved_at).length}</td>
-                      <td style={{ ...td, textAlign: 'right', color: '#1a8a4a' }}>{catNeeds.filter(n => n.resolved_at).length}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12 }}><CatBadge category={cat} /></td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right' }}>{catNeeds.length}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#993c1d' }}>{catNeeds.filter(n => !n.resolved_at).length}</td>
+                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#1a8a4a' }}>{catNeeds.filter(n => n.resolved_at).length}</td>
                     </tr>
                   )
                 })}
                 {needs.filter(n => !n.category).length > 0 && (
                   <tr style={{ borderBottom: '1px solid #e8e6df' }}>
-                    <td style={{ ...td, color: '#888780' }}>Uncategorized</td>
-                    <td style={{ ...td, textAlign: 'right' }}>{needs.filter(n => !n.category).length}</td>
-                    <td style={{ ...td, textAlign: 'right', color: '#993c1d' }}>{needs.filter(n => !n.category && !n.resolved_at).length}</td>
-                    <td style={{ ...td, textAlign: 'right', color: '#1a8a4a' }}>{needs.filter(n => !n.category && n.resolved_at).length}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12 }}><CatBadge category={null} /></td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right' }}>{needs.filter(n => !n.category).length}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#993c1d' }}>{needs.filter(n => !n.category && !n.resolved_at).length}</td>
+                    <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#1a8a4a' }}>{needs.filter(n => !n.category && n.resolved_at).length}</td>
                   </tr>
                 )}
               </tbody>
