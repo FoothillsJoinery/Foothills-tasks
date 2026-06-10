@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/router'
 import { supabase } from '../../lib/supabase'
 import Head from 'next/head'
@@ -24,6 +24,17 @@ const categoryOrder = [
   'Prerequisite task — other contractor',
 ]
 
+function sectionSortKeyFn(need, tMap, sMap, allSections) {
+  const task = tMap[need.task_id]
+  if (!task?.section_id) return { parentIdx: Infinity, subIdx: Infinity }
+  const sec = sMap[task.section_id]
+  if (!sec) return { parentIdx: Infinity, subIdx: Infinity }
+  const parentId = sec.parent_id || sec.id
+  const parentIdx = allSections.filter(s => !s.parent_id).findIndex(s => s.id === parentId)
+  const subIdx = sec.parent_id ? allSections.filter(s => s.parent_id === parentId).findIndex(s => s.id === sec.id) : -1
+  return { parentIdx, subIdx }
+}
+
 export default function ReportPage() {
   const router = useRouter()
   const { id } = router.query
@@ -44,6 +55,10 @@ export default function ReportPage() {
   const [sending, setSending] = useState(false)
   const [previewHtml, setPreviewHtml] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [taskOrder, setTaskOrder] = useState([])
+  const [dragOverId, setDragOverId] = useState(null)
+  const [customOrder, setCustomOrder] = useState(false)
+  const dragSrcId = useRef(null)
 
   function showToast(msg) {
     setToast(msg)
@@ -107,6 +122,32 @@ export default function ReportPage() {
       showToast('Need updated')
     }
   }
+
+  // Rebuild task order whenever sort mode or underlying data changes (resets custom ordering)
+  useEffect(() => {
+    if (needs.length === 0 && tasks.length === 0) return
+    const tMap = Object.fromEntries(tasks.map(t => [t.id, t]))
+    const sMap = Object.fromEntries(sections.map(s => [s.id, s]))
+    const openNeeds = needs.filter(n => !n.resolved_at)
+    const sorted = [...openNeeds].sort((a, b) => {
+      if (sortMode === 'date') return new Date(a.created_at) - new Date(b.created_at)
+      if (sortMode === 'section') {
+        const ak = sectionSortKeyFn(a, tMap, sMap, sections)
+        const bk = sectionSortKeyFn(b, tMap, sMap, sections)
+        if (ak.parentIdx !== bk.parentIdx) return ak.parentIdx - bk.parentIdx
+        if (ak.subIdx !== bk.subIdx) return ak.subIdx - bk.subIdx
+        return new Date(a.created_at) - new Date(b.created_at)
+      }
+      const ai = a.category ? categoryOrder.indexOf(a.category) : categoryOrder.length
+      const bi = b.category ? categoryOrder.indexOf(b.category) : categoryOrder.length
+      if (ai !== bi) return ai - bi
+      return new Date(a.created_at) - new Date(b.created_at)
+    })
+    const ids = []; const seen = new Set()
+    sorted.forEach(n => { if (!seen.has(n.task_id)) { seen.add(n.task_id); ids.push(n.task_id) } })
+    setTaskOrder(ids)
+    setCustomOrder(false)
+  }, [sortMode, needs, tasks, sections])
 
   useEffect(() => {
     if (!id) return
@@ -228,15 +269,88 @@ export default function ReportPage() {
     )
   }
 
+  function resetOrder() {
+    const tMap = Object.fromEntries(tasks.map(t => [t.id, t]))
+    const sMap = Object.fromEntries(sections.map(s => [s.id, s]))
+    const openNeeds = needs.filter(n => !n.resolved_at)
+    const sorted = [...openNeeds].sort((a, b) => {
+      if (sortMode === 'date') return new Date(a.created_at) - new Date(b.created_at)
+      if (sortMode === 'section') {
+        const ak = sectionSortKeyFn(a, tMap, sMap, sections)
+        const bk = sectionSortKeyFn(b, tMap, sMap, sections)
+        if (ak.parentIdx !== bk.parentIdx) return ak.parentIdx - bk.parentIdx
+        if (ak.subIdx !== bk.subIdx) return ak.subIdx - bk.subIdx
+        return new Date(a.created_at) - new Date(b.created_at)
+      }
+      const ai = a.category ? categoryOrder.indexOf(a.category) : categoryOrder.length
+      const bi = b.category ? categoryOrder.indexOf(b.category) : categoryOrder.length
+      if (ai !== bi) return ai - bi
+      return new Date(a.created_at) - new Date(b.created_at)
+    })
+    const ids = []; const seen = new Set()
+    sorted.forEach(n => { if (!seen.has(n.task_id)) { seen.add(n.task_id); ids.push(n.task_id) } })
+    setTaskOrder(ids)
+    setCustomOrder(false)
+  }
+
+  function handleDragStart(e, taskId) {
+    dragSrcId.current = taskId
+    e.dataTransfer.effectAllowed = 'move'
+    // slight opacity handled via CSS class set on the element
+  }
+
+  function handleDragOver(e, overTaskId) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (!dragSrcId.current || dragSrcId.current === overTaskId) return
+    setDragOverId(overTaskId)
+    setTaskOrder(prev => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(dragSrcId.current)
+      const toIdx = next.indexOf(overTaskId)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, dragSrcId.current)
+      return next
+    })
+  }
+
+  function handleDragEnd() {
+    if (dragSrcId.current) setCustomOrder(true)
+    dragSrcId.current = null
+    setDragOverId(null)
+  }
+
   function TaskBlock({ taskId, needs }) {
     const task = taskMap[taskId]
     if (!task) return null
     const path = sectionPath(task.section_id)
+    const isDragOver = dragOverId === taskId
+    const isDragging = dragSrcId.current === taskId
     return (
-      <div className="task-card" style={{ marginBottom: 8, border: '1px solid #e8e6df', borderRadius: 8, overflow: 'hidden', pageBreakInside: 'avoid' }}>
-        <div className="task-card-header" style={{ padding: '7px 12px', background: '#f8f7f4', borderBottom: '1px solid #e8e6df' }}>
-          {path && <div className="section-label" style={{ fontSize: 11, color: '#888780', marginBottom: 1 }}>{path}</div>}
-          <div className="task-title" style={{ fontSize: 13, fontWeight: 700, color: '#1a1a18' }}>{task.title}</div>
+      <div
+        className="task-card"
+        draggable
+        onDragStart={e => handleDragStart(e, taskId)}
+        onDragOver={e => handleDragOver(e, taskId)}
+        onDragEnd={handleDragEnd}
+        style={{
+          marginBottom: 8,
+          border: isDragOver ? '2px solid #c4966a' : '1px solid #e8e6df',
+          borderRadius: 8,
+          overflow: 'hidden',
+          pageBreakInside: 'avoid',
+          opacity: isDragging ? 0.5 : 1,
+          transition: 'opacity 0.1s, border-color 0.1s',
+          cursor: 'grab',
+        }}
+      >
+        <div className="task-card-header" style={{ padding: '7px 12px', background: '#f8f7f4', borderBottom: '1px solid #e8e6df', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="no-print drag-handle" title="Drag to reorder" style={{ color: '#c4b8aa', fontSize: 14, lineHeight: 1, flexShrink: 0, cursor: 'grab', userSelect: 'none' }}>⠿</span>
+          <div style={{ flex: 1 }}>
+            {path && <div className="section-label" style={{ fontSize: 11, color: '#888780', marginBottom: 1 }}>{path}</div>}
+            <div className="task-title" style={{ fontSize: 13, fontWeight: 700, color: '#1a1a18' }}>{task.title}</div>
+          </div>
         </div>
         <div className="task-card-body" style={{ padding: '0 12px' }}>
           {needs.map(n => <NeedLine key={n.id} need={n} />)}
@@ -250,58 +364,59 @@ export default function ReportPage() {
       <button
         key={mode}
         onClick={() => setSortMode(mode)}
-        style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid ' + (sortMode === mode ? '#1a1a18' : '#e8e6df'), background: sortMode === mode ? '#1a1a18' : '#fff', color: sortMode === mode ? '#fff' : '#5f5e5a' }}
+        style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid ' + (!customOrder && sortMode === mode ? '#1a1a18' : '#e8e6df'), background: !customOrder && sortMode === mode ? '#1a1a18' : '#fff', color: !customOrder && sortMode === mode ? '#fff' : '#5f5e5a' }}
       >
-        {label}{sortMode === mode ? ' ↑' : ''}
+        {label}
       </button>
     )
     return (
-      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, color: '#888780', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group by</span>
         {btn('section', 'Task / Section')}
         {btn('category', 'Category')}
         {btn('date', 'Date')}
+        {customOrder && (
+          <>
+            <span style={{ fontSize: 11, color: '#854f0b', background: '#fdf0e6', padding: '4px 10px', borderRadius: 20, border: '1px solid #f0d9b5' }}>Custom order</span>
+            <button
+              onClick={resetOrder}
+              style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid #e8e6df', background: '#fff', color: '#993c1d' }}
+            >
+              Reset order
+            </button>
+          </>
+        )}
       </div>
     )
   }
 
   function NeedsList({ needs }) {
-    // Group by task, then optionally by section/category
+    // Build a map of task_id -> needs for this filtered list
+    const needsByTask = {}
+    needs.forEach(n => {
+      if (!needsByTask[n.task_id]) needsByTask[n.task_id] = []
+      needsByTask[n.task_id].push(n)
+    })
+
+    // Determine rendering order: use taskOrder (which reflects drag state or auto-sort)
+    // Only include tasks that have visible needs
+    const orderedTaskIds = taskOrder.filter(tid => needsByTask[tid]?.length > 0)
+
+    // For tasks that appear in needs but not yet in taskOrder (e.g. newly loaded), append them
+    needs.forEach(n => {
+      if (!orderedTaskIds.includes(n.task_id)) orderedTaskIds.push(n.task_id)
+    })
+
     const groups = []
-    if (sortMode === 'section' || sortMode === 'date') {
-      // group consecutive needs by task
-      const taskGroups = {}
-      const taskOrder = []
-      needs.forEach(n => {
-        if (!taskGroups[n.task_id]) { taskGroups[n.task_id] = []; taskOrder.push(n.task_id) }
-        taskGroups[n.task_id].push(n)
-      })
-      // section mode: wrap in section headers
-      if (sortMode === 'section') {
-        let lastPath = null
-        taskOrder.forEach(tid => {
-          const task = taskMap[tid]
-          const path = task ? (sectionPath(task.section_id) || 'No section') : 'No section'
-          if (path !== lastPath) {
-            groups.push(
-              <div key={'sh-' + path} style={{ fontSize: 11, fontWeight: 700, color: '#5f5e5a', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '14px 0 6px', borderBottom: '2px solid #1a1a18', marginBottom: 8, position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
-                {path}
-              </div>
-            )
-            lastPath = path
-          }
-          groups.push(<TaskBlock key={tid} taskId={tid} needs={taskGroups[tid]} />)
-        })
-      } else {
-        taskOrder.forEach(tid => groups.push(<TaskBlock key={tid} taskId={tid} needs={taskGroups[tid]} />))
-      }
-    } else {
-      // category mode: group by category, then by task within
+
+    if (sortMode === 'category' && !customOrder) {
+      // Category mode: group by category with colored headers, tasks ordered within each group
       categoryOrder.concat(['__uncategorized__']).forEach(cat => {
-        const catNeeds = cat === '__uncategorized__'
-          ? needs.filter(n => !n.category)
-          : needs.filter(n => n.category === cat)
-        if (catNeeds.length === 0) return
+        const catTaskIds = orderedTaskIds.filter(tid => {
+          const tNeeds = needsByTask[tid] || []
+          return tNeeds.some(n => (n.category || '__uncategorized__') === cat)
+        })
+        if (catTaskIds.length === 0) return
         const c = catColors[cat]
         const label = cat === '__uncategorized__' ? 'Uncategorized' : cat
         groups.push(
@@ -309,15 +424,32 @@ export default function ReportPage() {
             {label}
           </div>
         )
-        const taskGroups = {}
-        const taskOrder = []
-        catNeeds.forEach(n => {
-          if (!taskGroups[n.task_id]) { taskGroups[n.task_id] = []; taskOrder.push(n.task_id) }
-          taskGroups[n.task_id].push(n)
+        catTaskIds.forEach(tid => {
+          const catNeeds = (needsByTask[tid] || []).filter(n => (n.category || '__uncategorized__') === cat)
+          groups.push(<TaskBlock key={cat + tid} taskId={tid} needs={catNeeds} />)
         })
-        taskOrder.forEach(tid => groups.push(<TaskBlock key={cat + tid} taskId={tid} needs={taskGroups[tid]} />))
+      })
+    } else {
+      // Section / date / custom mode: flat task cards with section dividers when grouped by section
+      const showSectionHeaders = sortMode === 'section' && !customOrder
+      let lastPath = null
+      orderedTaskIds.forEach(tid => {
+        if (showSectionHeaders) {
+          const task = taskMap[tid]
+          const path = task ? (sectionPath(task.section_id) || 'No section') : 'No section'
+          if (path !== lastPath) {
+            groups.push(
+              <div key={'sh-' + tid + path} style={{ fontSize: 11, fontWeight: 700, color: '#5f5e5a', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '14px 0 6px', borderBottom: '2px solid #1a1a18', marginBottom: 8, position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+                {path}
+              </div>
+            )
+            lastPath = path
+          }
+        }
+        groups.push(<TaskBlock key={tid} taskId={tid} needs={needsByTask[tid] || []} />)
       })
     }
+
     return <div>{groups}</div>
   }
 
