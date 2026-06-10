@@ -209,7 +209,7 @@ export default function ReportPage() {
 
   function NeedLine({ need }) {
     return (
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '1px solid #f0efed' }}>
+      <div className="need-line" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '6px 0', borderBottom: '1px solid #f0efed' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div className="need-text" style={{ fontSize: 13, color: '#1a1a18' }}>{need.text}</div>
           <div className="need-meta" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
@@ -233,12 +233,12 @@ export default function ReportPage() {
     if (!task) return null
     const path = sectionPath(task.section_id)
     return (
-      <div style={{ marginBottom: 10, border: '1px solid #e8e6df', borderRadius: 8, overflow: 'hidden', pageBreakInside: 'avoid' }}>
-        <div style={{ padding: '8px 12px', background: '#f8f7f4', borderBottom: '1px solid #e8e6df' }}>
-          {path && <div className="section-label" style={{ fontSize: 11, color: '#888780', marginBottom: 2 }}>{path}</div>}
+      <div className="task-card" style={{ marginBottom: 8, border: '1px solid #e8e6df', borderRadius: 8, overflow: 'hidden', pageBreakInside: 'avoid' }}>
+        <div className="task-card-header" style={{ padding: '7px 12px', background: '#f8f7f4', borderBottom: '1px solid #e8e6df' }}>
+          {path && <div className="section-label" style={{ fontSize: 11, color: '#888780', marginBottom: 1 }}>{path}</div>}
           <div className="task-title" style={{ fontSize: 13, fontWeight: 700, color: '#1a1a18' }}>{task.title}</div>
         </div>
-        <div style={{ padding: '0 12px' }}>
+        <div className="task-card-body" style={{ padding: '0 12px' }}>
           {needs.map(n => <NeedLine key={n.id} need={n} />)}
         </div>
       </div>
@@ -331,6 +331,18 @@ export default function ReportPage() {
             .no-print { display: none !important; }
             body { margin: 0; }
             table { page-break-inside: auto; }
+            .report-wrap { padding: 16px !important; font-size: 11px !important; }
+            .task-title { font-size: 11px !important; }
+            .need-text { font-size: 11px !important; }
+            .section-label { font-size: 10px !important; }
+            .need-meta { font-size: 10px !important; margin-top: 2px !important; }
+            .task-card { margin-bottom: 4px !important; }
+            .task-card-header { padding: 4px 8px !important; }
+            .task-card-body { padding: 0 8px !important; }
+            .need-line { padding: 3px 0 !important; }
+            h1 { font-size: 16px !important; margin-bottom: 4px !important; }
+            h2 { font-size: 11px !important; margin-bottom: 6px !important; }
+            .report-header { margin-bottom: 12px !important; }
           }
           @media (min-width: 768px) {
             .report-wrap { font-size: 15px !important; }
@@ -369,7 +381,7 @@ export default function ReportPage() {
           )}
         </div>
 
-        <div style={{ marginBottom: 20 }}>
+        <div className="report-header" style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
             Needs Report
           </div>
@@ -437,47 +449,6 @@ export default function ReportPage() {
               Open ({open.length})
             </h2>
             <NeedsList needs={open} />
-          </div>
-        )}
-
-
-        {needs.length > 0 && (
-          <div style={{ marginTop: 40, pageBreakBefore: 'always' }}>
-            <h2 style={{ fontSize: 14, fontWeight: 700, marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#5f5e5a' }}>
-              By category
-            </h2>
-            <table style={{ width: 'auto', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  {['Category','Total','Open','Resolved'].map((h, i) => (
-                    <th key={h} style={{ padding: '8px 12px', fontSize: 11, fontWeight: 600, textAlign: i === 0 ? 'left' : 'right', color: i === 2 ? '#993c1d' : i === 3 ? '#1a8a4a' : '#5f5e5a', borderBottom: '2px solid #1a1a18', whiteSpace: 'nowrap' }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {categoryOrder.map(cat => {
-                  const catNeeds = needs.filter(n => n.category === cat)
-                  if (catNeeds.length === 0) return null
-                  const c = catColors[cat]
-                  return (
-                    <tr key={cat} style={{ borderBottom: '1px solid #e8e6df' }}>
-                      <td style={{ padding: '8px 12px', fontSize: 12 }}><CatBadge category={cat} /></td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right' }}>{catNeeds.length}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#993c1d' }}>{catNeeds.filter(n => !n.resolved_at).length}</td>
-                      <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#1a8a4a' }}>{catNeeds.filter(n => n.resolved_at).length}</td>
-                    </tr>
-                  )
-                })}
-                {needs.filter(n => !n.category).length > 0 && (
-                  <tr style={{ borderBottom: '1px solid #e8e6df' }}>
-                    <td style={{ padding: '8px 12px', fontSize: 12 }}><CatBadge category={null} /></td>
-                    <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right' }}>{needs.filter(n => !n.category).length}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#993c1d' }}>{needs.filter(n => !n.category && !n.resolved_at).length}</td>
-                    <td style={{ padding: '8px 12px', fontSize: 12, textAlign: 'right', color: '#1a8a4a' }}>{needs.filter(n => !n.category && n.resolved_at).length}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         )}
       </div>
