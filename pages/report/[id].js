@@ -375,7 +375,7 @@ export default function ReportPage() {
           </div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700 }}>{job.name}</h1>
           <div style={{ fontSize: 13, color: '#888780', marginTop: 4 }}>
-            Generated {fmtDate(new Date().toISOString())} · {filteredNeeds.length} of {needs.length} need{needs.length !== 1 ? 's' : ''} · {open.length} open · {resolved.length} resolved
+            Generated {fmtDate(new Date().toISOString())} · {open.length} open need{open.length !== 1 ? 's' : ''}
           </div>
         </div>
 
@@ -440,14 +440,6 @@ export default function ReportPage() {
           </div>
         )}
 
-        {resolved.length > 0 && (
-          <div style={{ marginBottom: 36 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a8a4a', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Resolved ({resolved.length})
-            </h2>
-            <NeedsList needs={resolved} />
-          </div>
-        )}
 
         {needs.length > 0 && (
           <div style={{ marginTop: 40, pageBreakBefore: 'always' }}>
