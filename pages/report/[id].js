@@ -211,8 +211,8 @@ export default function ReportPage() {
     return (
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '1px solid #f0efed' }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13, color: '#1a1a18' }}>{need.text}</div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+          <div className="need-text" style={{ fontSize: 13, color: '#1a1a18' }}>{need.text}</div>
+          <div className="need-meta" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
             <CatBadge category={need.category} />
             <span style={{ fontSize: 11, color: '#b4b2a9' }}>{fmtDate(need.created_at)}</span>
           </div>
@@ -235,8 +235,8 @@ export default function ReportPage() {
     return (
       <div style={{ marginBottom: 10, border: '1px solid #e8e6df', borderRadius: 8, overflow: 'hidden', pageBreakInside: 'avoid' }}>
         <div style={{ padding: '8px 12px', background: '#f8f7f4', borderBottom: '1px solid #e8e6df' }}>
-          {path && <div style={{ fontSize: 11, color: '#888780', marginBottom: 2 }}>{path}</div>}
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a18' }}>{task.title}</div>
+          {path && <div className="section-label" style={{ fontSize: 11, color: '#888780', marginBottom: 2 }}>{path}</div>}
+          <div className="task-title" style={{ fontSize: 13, fontWeight: 700, color: '#1a1a18' }}>{task.title}</div>
         </div>
         <div style={{ padding: '0 12px' }}>
           {needs.map(n => <NeedLine key={n.id} need={n} />)}
@@ -332,9 +332,16 @@ export default function ReportPage() {
             body { margin: 0; }
             table { page-break-inside: auto; }
           }
+          @media (min-width: 768px) {
+            .report-wrap { font-size: 15px !important; }
+            .report-wrap .need-text { font-size: 15px !important; }
+            .report-wrap .task-title { font-size: 15px !important; }
+            .report-wrap .section-label { font-size: 13px !important; }
+            .report-wrap .need-meta { font-size: 13px !important; }
+          }
         `}</style>
       </Head>
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px', fontFamily: 'sans-serif', color: '#1a1a18' }}>
+      <div className="report-wrap" style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px', fontFamily: 'sans-serif', color: '#1a1a18' }}>
         <div className="no-print" style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
           <button
             onClick={() => router.back()}
