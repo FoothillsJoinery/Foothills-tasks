@@ -191,105 +191,136 @@ export default function ReportPage() {
   const open = sortNeeds(filteredNeeds.filter(n => !n.resolved_at))
   const resolved = sortNeeds(filteredNeeds.filter(n => n.resolved_at))
 
-  function groupHeader(label, colSpan) {
+  const catColors = {
+    'Decision/answer needed from client':      { bg: '#e8f0fe', color: '#1a56db', border: '#c3d2f7' },
+    'Material not supplied by Foothills Joinery': { bg: '#fff3e0', color: '#c05e00', border: '#ffcc80' },
+    'Prerequisite task — Foothills Joinery':   { bg: '#fdf0e6', color: '#854f0b', border: '#f0d9b5' },
+    'Prerequisite task — other contractor':    { bg: '#f3e8ff', color: '#6b21a8', border: '#ddd6fe' },
+  }
+
+  function CatBadge({ category }) {
+    const c = catColors[category]
     return (
-      <tr key={'grp-' + label}>
-        <td colSpan={colSpan} style={{ padding: '10px 10px 4px', fontSize: 11, fontWeight: 700, color: '#5f5e5a', textTransform: 'uppercase', letterSpacing: '0.05em', background: '#f8f7f4', borderBottom: '1px solid #e8e6df', position: 'sticky', top: 0, zIndex: 1 }}>
-          {label}
-        </td>
-      </tr>
+      <span style={{ display: 'inline-block', fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 20, background: c ? c.bg : '#f0efed', color: c ? c.color : '#888780', border: `1px solid ${c ? c.border : '#e8e6df'}`, whiteSpace: 'nowrap' }}>
+        {category || 'Uncategorized'}
+      </span>
     )
   }
 
-  function NeedsTable({ needs }) {
-    const colSpan = 5
-    const rows = []
-    if (sortMode === 'section') {
-      let lastPath = undefined
-      needs.forEach(n => {
-        const task = taskMap[n.task_id]
-        const path = task ? sectionPath(task.section_id) : null
-        const label = path || 'No section'
-        if (label !== lastPath) {
-          rows.push(groupHeader(label, colSpan))
-          lastPath = label
-        }
-        rows.push(<NeedRow key={n.id} need={n} />)
-      })
-    } else if (sortMode === 'category') {
-      let lastCat = undefined
-      needs.forEach(n => {
-        const cat = n.category || 'Uncategorized'
-        if (cat !== lastCat) {
-          rows.push(groupHeader(cat, colSpan))
-          lastCat = cat
-        }
-        rows.push(<NeedRow key={n.id} need={n} />)
-      })
-    } else {
-      needs.forEach(n => rows.push(<NeedRow key={n.id} need={n} />))
-    }
-
+  function NeedLine({ need }) {
     return (
-      <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              {thSort('section', 'Task')}
-              <th style={th}>What's needed</th>
-              {thSort('category', 'Category')}
-              {thSort('date', 'Logged')}
-              <th style={th} className="no-print"></th>
-            </tr>
-          </thead>
-          <tbody>{rows}</tbody>
-        </table>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '7px 0', borderBottom: '1px solid #f0efed' }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, color: '#1a1a18' }}>{need.text}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' }}>
+            <CatBadge category={need.category} />
+            <span style={{ fontSize: 11, color: '#b4b2a9' }}>{fmtDate(need.created_at)}</span>
+          </div>
+        </div>
+        <button
+          className="no-print"
+          onClick={() => setEditForm({ id: need.id, text: need.text, category: need.category || '' })}
+          style={{ padding: '3px 10px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid #e8e6df', borderRadius: 4, color: '#5f5e5a', fontFamily: 'inherit', flexShrink: 0 }}
+        >
+          Edit
+        </button>
       </div>
     )
   }
 
-  function NeedRow({ need }) {
-    const isOpen = !need.resolved_at
+  function TaskBlock({ taskId, needs }) {
+    const task = taskMap[taskId]
+    if (!task) return null
+    const path = sectionPath(task.section_id)
     return (
-      <tr style={{ borderBottom: '1px solid #e8e6df', pageBreakInside: 'avoid' }}>
-        <td style={td}>
-          {(() => {
-            const task = taskMap[need.task_id]
-            if (!task) return '—'
-            const path = sectionPath(task.section_id)
-            return (
-              <>
-                {path && <div style={{ fontSize: 11, color: '#888780', marginBottom: 2 }}>{path}</div>}
-                {task.title}
-              </>
-            )
-          })()}
-        </td>
-        <td style={td}>{need.text}</td>
-        <td style={td}>{need.category || '—'}</td>
-        <td style={td}>{fmtDate(need.created_at)}</td>
-        <td style={{ ...td, whiteSpace: 'nowrap' }} className="no-print">
-          <button
-            onClick={() => setEditForm({ id: need.id, text: need.text, category: need.category || '' })}
-            style={{ padding: '3px 10px', fontSize: 11, cursor: 'pointer', background: 'none', border: '1px solid #e8e6df', borderRadius: 4, color: '#5f5e5a', fontFamily: 'inherit' }}
-          >
-            Edit
-          </button>
-        </td>
-      </tr>
+      <div style={{ marginBottom: 10, border: '1px solid #e8e6df', borderRadius: 8, overflow: 'hidden', pageBreakInside: 'avoid' }}>
+        <div style={{ padding: '8px 12px', background: '#f8f7f4', borderBottom: '1px solid #e8e6df' }}>
+          {path && <div style={{ fontSize: 11, color: '#888780', marginBottom: 2 }}>{path}</div>}
+          <div style={{ fontSize: 13, fontWeight: 700, color: '#1a1a18' }}>{task.title}</div>
+        </div>
+        <div style={{ padding: '0 12px' }}>
+          {needs.map(n => <NeedLine key={n.id} need={n} />)}
+        </div>
+      </div>
     )
   }
 
-  const td = { padding: '8px 10px', fontSize: 12, verticalAlign: 'top', color: '#1a1a18' }
-  const th = { padding: '8px 10px', fontSize: 11, fontWeight: 600, textAlign: 'left', color: '#5f5e5a', borderBottom: '2px solid #1a1a18', whiteSpace: 'nowrap', position: 'sticky', top: 0, background: '#fff', zIndex: 1 }
-  const thSort = (mode, label) => (
-    <th
-      style={{ ...th, cursor: 'pointer', userSelect: 'none', color: sortMode === mode ? '#1a1a18' : '#5f5e5a' }}
-      onClick={() => setSortMode(mode)}
-    >
-      {label}{sortMode === mode ? ' ↑' : ''}
-    </th>
-  )
+  function SortBar() {
+    const btn = (mode, label) => (
+      <button
+        key={mode}
+        onClick={() => setSortMode(mode)}
+        style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, cursor: 'pointer', fontFamily: 'inherit', border: '1px solid ' + (sortMode === mode ? '#1a1a18' : '#e8e6df'), background: sortMode === mode ? '#1a1a18' : '#fff', color: sortMode === mode ? '#fff' : '#5f5e5a' }}
+      >
+        {label}{sortMode === mode ? ' ↑' : ''}
+      </button>
+    )
+    return (
+      <div className="no-print" style={{ display: 'flex', gap: 8, marginBottom: 16, alignItems: 'center' }}>
+        <span style={{ fontSize: 11, color: '#888780', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Group by</span>
+        {btn('section', 'Task / Section')}
+        {btn('category', 'Category')}
+        {btn('date', 'Date')}
+      </div>
+    )
+  }
+
+  function NeedsList({ needs }) {
+    // Group by task, then optionally by section/category
+    const groups = []
+    if (sortMode === 'section' || sortMode === 'date') {
+      // group consecutive needs by task
+      const taskGroups = {}
+      const taskOrder = []
+      needs.forEach(n => {
+        if (!taskGroups[n.task_id]) { taskGroups[n.task_id] = []; taskOrder.push(n.task_id) }
+        taskGroups[n.task_id].push(n)
+      })
+      // section mode: wrap in section headers
+      if (sortMode === 'section') {
+        let lastPath = null
+        taskOrder.forEach(tid => {
+          const task = taskMap[tid]
+          const path = task ? (sectionPath(task.section_id) || 'No section') : 'No section'
+          if (path !== lastPath) {
+            groups.push(
+              <div key={'sh-' + path} style={{ fontSize: 11, fontWeight: 700, color: '#5f5e5a', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '14px 0 6px', borderBottom: '2px solid #1a1a18', marginBottom: 8, position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+                {path}
+              </div>
+            )
+            lastPath = path
+          }
+          groups.push(<TaskBlock key={tid} taskId={tid} needs={taskGroups[tid]} />)
+        })
+      } else {
+        taskOrder.forEach(tid => groups.push(<TaskBlock key={tid} taskId={tid} needs={taskGroups[tid]} />))
+      }
+    } else {
+      // category mode: group by category, then by task within
+      categoryOrder.concat(['__uncategorized__']).forEach(cat => {
+        const catNeeds = cat === '__uncategorized__'
+          ? needs.filter(n => !n.category)
+          : needs.filter(n => n.category === cat)
+        if (catNeeds.length === 0) return
+        const c = catColors[cat]
+        const label = cat === '__uncategorized__' ? 'Uncategorized' : cat
+        groups.push(
+          <div key={'ch-' + cat} style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', padding: '14px 0 6px', borderBottom: `2px solid ${c ? c.color : '#888780'}`, color: c ? c.color : '#888780', marginBottom: 8, position: 'sticky', top: 0, background: '#fff', zIndex: 1 }}>
+            {label}
+          </div>
+        )
+        const taskGroups = {}
+        const taskOrder = []
+        catNeeds.forEach(n => {
+          if (!taskGroups[n.task_id]) { taskGroups[n.task_id] = []; taskOrder.push(n.task_id) }
+          taskGroups[n.task_id].push(n)
+        })
+        taskOrder.forEach(tid => groups.push(<TaskBlock key={cat + tid} taskId={tid} needs={taskGroups[tid]} />))
+      })
+    }
+    return <div>{groups}</div>
+  }
+
 
   return (
     <>
@@ -391,21 +422,23 @@ export default function ReportPage() {
           <div style={{ fontSize: 14, color: '#888780' }}>No needs logged for this job.</div>
         )}
 
+        <SortBar />
+
         {open.length > 0 && (
           <div style={{ marginBottom: 36 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#993c1d', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#993c1d', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Open ({open.length})
             </h2>
-            <NeedsTable needs={open} />
+            <NeedsList needs={open} />
           </div>
         )}
 
         {resolved.length > 0 && (
           <div style={{ marginBottom: 36 }}>
-            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a8a4a', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <h2 style={{ fontSize: 14, fontWeight: 700, color: '#1a8a4a', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               Resolved ({resolved.length})
             </h2>
-            <NeedsTable needs={resolved} />
+            <NeedsList needs={resolved} />
           </div>
         )}
 

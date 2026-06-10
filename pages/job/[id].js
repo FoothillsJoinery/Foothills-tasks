@@ -212,13 +212,21 @@ export default function JobPage() {
     }).eq('id', resolveForm.need_id).select().single()
     setSaving(false)
     if (!error && data) {
+      const updatedNeeds = (task?.needs || []).map(n => n.id === resolveForm.need_id ? data : n)
+      const allResolved = updatedNeeds.length > 0 && updatedNeeds.every(n => n.resolved_at)
+      let updatedTask = null
+      if (allResolved && task?.status === 'blocked') {
+        const { data: td } = await supabase.from('tasks').update({ status: 'ready', prev_status: null }).eq('id', resolveForm.task_id).select('*, needs(*)').single()
+        if (td) updatedTask = td
+        await logActivity(`"${task?.title}" moved to ready — all needs resolved`)
+      }
       setTasks(prev => prev.map(t => t.id === resolveForm.task_id
-        ? { ...t, needs: t.needs.map(n => n.id === resolveForm.need_id ? data : n) }
+        ? updatedTask || { ...t, needs: updatedNeeds }
         : t))
       await logActivity(`resolved need on "${task?.title}"`)
       setResolveForm({ answer: '', task_id: null, need_id: null })
       setModal(null)
-      showToast('Need resolved')
+      showToast(allResolved && task?.status === 'blocked' ? 'Need resolved — task moved to Ready ✓' : 'Need resolved')
     }
   }
 
