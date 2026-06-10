@@ -55,6 +55,7 @@ export default function ReportPage() {
   const [sending, setSending] = useState(false)
   const [previewHtml, setPreviewHtml] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [sendDateFilter, setSendDateFilter] = useState('all')
   const [taskOrder, setTaskOrder] = useState([])
   const [dragOverId, setDragOverId] = useState(null)
   const [customOrder, setCustomOrder] = useState(false)
@@ -70,8 +71,16 @@ export default function ReportPage() {
     setSendRecipients(saved)
     setSendNewEmail('')
     setSendNote('')
+    setSendDateFilter('all')
     setPreviewHtml(null)
     setSendModal(true)
+  }
+
+  function getSinceDate(filter, lastSent) {
+    if (filter === 'all') return null
+    if (filter === 'since-last') return lastSent || null
+    const days = parseInt(filter)
+    return new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString()
   }
 
   async function loadPreview() {
@@ -81,6 +90,8 @@ export default function ReportPage() {
       const params = new URLSearchParams({ job_id: id })
       ;[...hiddenCategories].forEach(c => params.append('hidden', c))
       if (sendNote.trim()) params.set('note', sendNote.trim())
+      const since = getSinceDate(sendDateFilter, job?.last_weekly_sent)
+      if (since) params.set('since', since)
       const res = await fetch('/api/preview-report?' + params)
       if (res.ok) setPreviewHtml(await res.text())
     } catch {}
@@ -96,11 +107,12 @@ export default function ReportPage() {
     setSendNewEmail('')
     setSending(true)
     setSendModal(false)
+    const since = getSinceDate(sendDateFilter, job?.last_weekly_sent)
     try {
       const res = await fetch('/api/send-report', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ job_id: id, recipients: finalRecipients, hidden_categories: [...hiddenCategories], note: sendNote.trim() })
+        body: JSON.stringify({ job_id: id, recipients: finalRecipients, hidden_categories: [...hiddenCategories], note: sendNote.trim(), since })
       })
       if (res.ok) showToast('Report sent')
       else showToast('Failed to send')
@@ -626,6 +638,29 @@ export default function ReportPage() {
                 onChange={e => { setSendNote(e.target.value); setPreviewHtml(null) }}
                 style={{ width: '100%', padding: '10px 12px', fontSize: 13, border: '1px solid #e8e6df', borderRadius: 8, fontFamily: 'inherit', minHeight: 72, boxSizing: 'border-box', resize: 'vertical' }}
               />
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <label style={{ fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 8, color: '#5f5e5a' }}>Which needs to include</label>
+              {[
+                { value: 'all', label: 'All open needs' },
+                { value: 'since-last', label: job?.last_weekly_sent ? `Since last report sent  (${new Date(job.last_weekly_sent).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })})` : 'Since last report sent  (never sent)', disabled: !job?.last_weekly_sent },
+                { value: '7', label: 'Added in last 7 days' },
+                { value: '14', label: 'Added in last 14 days' },
+                { value: '30', label: 'Added in last 30 days' },
+              ].map(opt => (
+                <label key={opt.value} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, fontSize: 13, color: opt.disabled ? '#b4b2a9' : '#1a1a18', cursor: opt.disabled ? 'default' : 'pointer' }}>
+                  <input
+                    type="radio"
+                    name="dateFilter"
+                    value={opt.value}
+                    checked={sendDateFilter === opt.value}
+                    disabled={opt.disabled}
+                    onChange={() => { setSendDateFilter(opt.value); setPreviewHtml(null) }}
+                  />
+                  {opt.label}
+                </label>
+              ))}
             </div>
 
             <div style={{ marginBottom: 16 }}>
