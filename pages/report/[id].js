@@ -35,6 +35,31 @@ function sectionSortKeyFn(need, tMap, sMap, allSections) {
   return { parentIdx, subIdx }
 }
 
+function buildSortedTaskOrder(openNeeds, sortMode, tMap, sMap, allSections) {
+  const sorted = [...openNeeds].sort((a, b) => {
+    if (sortMode === 'date') return new Date(a.created_at) - new Date(b.created_at)
+    if (sortMode === 'section') {
+      const ak = sectionSortKeyFn(a, tMap, sMap, allSections)
+      const bk = sectionSortKeyFn(b, tMap, sMap, allSections)
+      if (ak.parentIdx !== bk.parentIdx) return ak.parentIdx - bk.parentIdx
+      if (ak.subIdx !== bk.subIdx) return ak.subIdx - bk.subIdx
+      return new Date(a.created_at) - new Date(b.created_at)
+    }
+    // category mode: sort by category, then section within category, then date
+    const ai = a.category ? categoryOrder.indexOf(a.category) : categoryOrder.length
+    const bi = b.category ? categoryOrder.indexOf(b.category) : categoryOrder.length
+    if (ai !== bi) return ai - bi
+    const ak = sectionSortKeyFn(a, tMap, sMap, allSections)
+    const bk = sectionSortKeyFn(b, tMap, sMap, allSections)
+    if (ak.parentIdx !== bk.parentIdx) return ak.parentIdx - bk.parentIdx
+    if (ak.subIdx !== bk.subIdx) return ak.subIdx - bk.subIdx
+    return new Date(a.created_at) - new Date(b.created_at)
+  })
+  const ids = []; const seen = new Set()
+  sorted.forEach(n => { if (!seen.has(n.task_id)) { seen.add(n.task_id); ids.push(n.task_id) } })
+  return ids
+}
+
 export default function ReportPage() {
   const router = useRouter()
   const { id } = router.query
@@ -141,23 +166,7 @@ export default function ReportPage() {
     const tMap = Object.fromEntries(tasks.map(t => [t.id, t]))
     const sMap = Object.fromEntries(sections.map(s => [s.id, s]))
     const openNeeds = needs.filter(n => !n.resolved_at)
-    const sorted = [...openNeeds].sort((a, b) => {
-      if (sortMode === 'date') return new Date(a.created_at) - new Date(b.created_at)
-      if (sortMode === 'section') {
-        const ak = sectionSortKeyFn(a, tMap, sMap, sections)
-        const bk = sectionSortKeyFn(b, tMap, sMap, sections)
-        if (ak.parentIdx !== bk.parentIdx) return ak.parentIdx - bk.parentIdx
-        if (ak.subIdx !== bk.subIdx) return ak.subIdx - bk.subIdx
-        return new Date(a.created_at) - new Date(b.created_at)
-      }
-      const ai = a.category ? categoryOrder.indexOf(a.category) : categoryOrder.length
-      const bi = b.category ? categoryOrder.indexOf(b.category) : categoryOrder.length
-      if (ai !== bi) return ai - bi
-      return new Date(a.created_at) - new Date(b.created_at)
-    })
-    const ids = []; const seen = new Set()
-    sorted.forEach(n => { if (!seen.has(n.task_id)) { seen.add(n.task_id); ids.push(n.task_id) } })
-    setTaskOrder(ids)
+    setTaskOrder(buildSortedTaskOrder(openNeeds, sortMode, tMap, sMap, sections))
     setCustomOrder(false)
   }, [sortMode, needs, tasks, sections])
 
@@ -285,23 +294,7 @@ export default function ReportPage() {
     const tMap = Object.fromEntries(tasks.map(t => [t.id, t]))
     const sMap = Object.fromEntries(sections.map(s => [s.id, s]))
     const openNeeds = needs.filter(n => !n.resolved_at)
-    const sorted = [...openNeeds].sort((a, b) => {
-      if (sortMode === 'date') return new Date(a.created_at) - new Date(b.created_at)
-      if (sortMode === 'section') {
-        const ak = sectionSortKeyFn(a, tMap, sMap, sections)
-        const bk = sectionSortKeyFn(b, tMap, sMap, sections)
-        if (ak.parentIdx !== bk.parentIdx) return ak.parentIdx - bk.parentIdx
-        if (ak.subIdx !== bk.subIdx) return ak.subIdx - bk.subIdx
-        return new Date(a.created_at) - new Date(b.created_at)
-      }
-      const ai = a.category ? categoryOrder.indexOf(a.category) : categoryOrder.length
-      const bi = b.category ? categoryOrder.indexOf(b.category) : categoryOrder.length
-      if (ai !== bi) return ai - bi
-      return new Date(a.created_at) - new Date(b.created_at)
-    })
-    const ids = []; const seen = new Set()
-    sorted.forEach(n => { if (!seen.has(n.task_id)) { seen.add(n.task_id); ids.push(n.task_id) } })
-    setTaskOrder(ids)
+    setTaskOrder(buildSortedTaskOrder(openNeeds, sortMode, tMap, sMap, sections))
     setCustomOrder(false)
   }
 
