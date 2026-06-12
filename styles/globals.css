@@ -9,6 +9,7 @@ html, body {
   background: #f5f4f0;
   color: #1a1a18;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 .app {
