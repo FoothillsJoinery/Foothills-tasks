@@ -5,7 +5,7 @@ import Head from 'next/head'
 
 export default function JoinPage() {
   const router = useRouter()
-  const { id, role } = router.query
+  const { id, role, revoked } = router.query
   const [job, setJob] = useState(null)
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -19,11 +19,19 @@ export default function JoinPage() {
     })
   }, [id])
 
-  function join() {
+  async function join() {
     if (!name.trim()) return
     setJoining(true)
+    const guestRole = role || 'carpenter'
+    // Record this person in the access table
+    const { data } = await supabase
+      .from('job_access')
+      .insert({ job_id: id, name: name.trim(), role: guestRole })
+      .select('id')
+      .single()
     localStorage.setItem('guestName_' + id, name.trim())
-    localStorage.setItem('guestRole_' + id, role || 'carpenter')
+    localStorage.setItem('guestRole_' + id, guestRole)
+    if (data?.id) localStorage.setItem('guestAccessId_' + id, data.id)
     router.push('/job/' + id)
   }
 
@@ -48,7 +56,13 @@ export default function JoinPage() {
       <div className="login-wrap">
         <div className="login-card">
           <div className="login-logo">Foothills Joinery</div>
-          <div className="login-sub">You've been invited to view a job</div>
+          {revoked ? (
+            <div style={{ fontSize: 13, color: '#993c1d', background: '#faece7', padding: '10px 12px', borderRadius: 8, marginBottom: 16 }}>
+              Your access to this job has been removed. Contact Foothills Joinery if you think this is a mistake.
+            </div>
+          ) : (
+            <div className="login-sub">You've been invited to view a job</div>
+          )}
 
           <div style={{ background: '#f5f4f0', borderRadius: 10, padding: '12px 14px', marginBottom: 20 }}>
             <div style={{ fontSize: 13, color: '#888780', marginBottom: 2 }}>Job</div>

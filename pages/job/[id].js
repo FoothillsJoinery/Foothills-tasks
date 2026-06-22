@@ -38,6 +38,7 @@ export default function JobPage() {
   const [previewHtml, setPreviewHtml] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
   const [sendNote, setSendNote] = useState('')
+  const [jobAccess, setJobAccess] = useState([])
 
   useEffect(() => {
     if (!id) return
@@ -49,7 +50,23 @@ export default function JobPage() {
         // Check for guest token (carpenter/client link)
         const guestName = localStorage.getItem('guestName_' + id)
         const guestRole = localStorage.getItem('guestRole_' + id)
+        const guestAccessId = localStorage.getItem('guestAccessId_' + id)
         if (guestName && guestRole) {
+          // Check access hasn't been revoked
+          if (guestAccessId) {
+            const { data: access } = await supabase
+              .from('job_access')
+              .select('revoked_at')
+              .eq('id', guestAccessId)
+              .single()
+            if (access?.revoked_at) {
+              localStorage.removeItem('guestName_' + id)
+              localStorage.removeItem('guestRole_' + id)
+              localStorage.removeItem('guestAccessId_' + id)
+              router.push('/join/' + id + '?revoked=1')
+              return
+            }
+          }
           setUser({ email: guestName, role: guestRole, isGuest: true })
           loadAll()
         } else {
@@ -61,17 +78,29 @@ export default function JobPage() {
 
   async function loadAll() {
     if (!id) return
-    const [jobRes, secRes, taskRes, actRes] = await Promise.all([
+    const [jobRes, secRes, taskRes, actRes, accessRes] = await Promise.all([
       supabase.from('jobs').select('*').eq('id', id).single(),
       supabase.from('sections').select('*').eq('job_id', id).order('created_at'),
       supabase.from('tasks').select('*, needs(*)').eq('job_id', id).order('created_at'),
-      supabase.from('activity').select('*').eq('job_id', id).order('created_at', { ascending: false }).limit(50)
+      supabase.from('activity').select('*').eq('job_id', id).order('created_at', { ascending: false }).limit(50),
+      supabase.from('job_access').select('*').eq('job_id', id).order('joined_at', { ascending: false })
     ])
     if (jobRes.data) setJob(jobRes.data)
     setSections(secRes.data || [])
     setTasks(taskRes.data || [])
     setActivity(actRes.data || [])
+    setJobAccess(accessRes.data || [])
     setLoading(false)
+  }
+
+  async function revokeAccess(accessId) {
+    await supabase.from('job_access').update({ revoked_at: new Date().toISOString() }).eq('id', accessId)
+    setJobAccess(prev => prev.map(a => a.id === accessId ? { ...a, revoked_at: new Date().toISOString() } : a))
+  }
+
+  async function restoreAccess(accessId) {
+    await supabase.from('job_access').update({ revoked_at: null }).eq('id', accessId)
+    setJobAccess(prev => prev.map(a => a.id === accessId ? { ...a, revoked_at: null } : a))
   }
 
   function userName() {
@@ -1022,6 +1051,40 @@ export default function JobPage() {
                 </div>
                 {job?.last_weekly_sent && (
                   <div style={{ fontSize: 11, color: '#b4b2a9', marginTop: 6 }}>Last weekly sent {ts(job.last_weekly_sent)}</div>
+                )}
+              </div>
+
+              <div style={{ borderTop: '1px solid #e8e6df', marginTop: 16, paddingTop: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                  Who has access
+                </div>
+                {jobAccess.length === 0 ? (
+                  <div style={{ fontSize: 13, color: '#b4b2a9' }}>No one has joined via link yet.</div>
+                ) : (
+                  jobAccess.map(a => {
+                    const isRevoked = !!a.revoked_at
+                    const roleLabel = a.role === 'client' ? 'Client / Site Super' : 'Carpenter'
+                    const roleColor = a.role === 'client' ? '#854f0b' : '#185fa5'
+                    const roleBg = a.role === 'client' ? '#faeeda' : '#e6f1fb'
+                    return (
+                      <div key={a.id} className="share-sheet-row" style={{ alignItems: 'center', opacity: isRevoked ? 0.5 : 1 }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a18', textDecoration: isRevoked ? 'line-through' : 'none' }}>{a.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                            <span style={{ fontSize: 11, fontWeight: 600, padding: '1px 7px', borderRadius: 20, background: roleBg, color: roleColor }}>{roleLabel}</span>
+                            <span style={{ fontSize: 11, color: '#b4b2a9' }}>Joined {ts(a.joined_at)}</span>
+                          </div>
+                        </div>
+                        <button
+                          className="share-btn"
+                          onClick={() => isRevoked ? restoreAccess(a.id) : revokeAccess(a.id)}
+                          style={isRevoked ? {} : { color: '#993c1d', border: '1px solid #f5c9bb' }}
+                        >
+                          {isRevoked ? 'Restore' : 'Revoke'}
+                        </button>
+                      </div>
+                    )
+                  })
                 )}
               </div>
             </div>
