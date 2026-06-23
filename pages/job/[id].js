@@ -42,7 +42,8 @@ export default function JobPage() {
 
   useEffect(() => {
     if (!id) return
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession()
       if (session) {
         setUser(session.user)
         loadAll()
@@ -73,7 +74,8 @@ export default function JobPage() {
           router.push('/join/' + id)
         }
       }
-    })
+    }
+    init()
   }, [id])
 
   async function loadAll() {
