@@ -15,8 +15,10 @@ export default function Home() {
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) { router.push('/login'); return }
+      const { data: carp } = await supabase.from('carpenters').select('id').eq('email', session.user.email).single()
+      if (carp) { router.push('/crew'); return }
       setUser(session.user)
       loadJobs()
     })
@@ -78,7 +80,8 @@ export default function Home() {
       <div className="app">
         <div className="topbar">
           <span className="topbar-title">Foothills Joinery</span>
-          <button className="action-btn" onClick={signOut} style={{ marginLeft: 'auto' }}>Sign out</button>
+          <button className="action-btn" onClick={() => router.push('/carpenters')} style={{ marginLeft: 'auto' }}>Crew</button>
+          <button className="action-btn" onClick={signOut}>Sign out</button>
         </div>
 
         <div style={{ padding: '16px' }}>

@@ -327,7 +327,7 @@ html, body {
 }
 input[type=text], input[type=password], textarea, select {
   width: 100%;
-  font-size: 14px;
+  font-size: 16px;
   padding: 10px 12px;
   border-radius: 8px;
   border: 1px solid #d3d1c7;

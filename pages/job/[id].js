@@ -39,13 +39,23 @@ export default function JobPage() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [sendNote, setSendNote] = useState('')
   const [jobAccess, setJobAccess] = useState([])
+  const [carpenterRoster, setCarpenterRoster] = useState([])
 
   useEffect(() => {
     if (!id) return
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session) {
-        setUser(session.user)
+        const { data: carp } = await supabase.from('carpenters').select('*').eq('email', session.user.email).single()
+        if (carp) {
+          if (!carp.active) { router.push('/crew'); return }
+          const { data: access } = await supabase.from('job_access')
+            .select('*').eq('carpenter_id', carp.id).eq('job_id', id).is('revoked_at', null).single()
+          if (!access) { router.push('/crew'); return }
+          setUser({ name: carp.name, email: carp.email, role: 'carpenter', isCarpenter: true })
+        } else {
+          setUser(session.user)
+        }
         loadAll()
       } else {
         // Check for guest token (carpenter/client link)
@@ -80,18 +90,20 @@ export default function JobPage() {
 
   async function loadAll() {
     if (!id) return
-    const [jobRes, secRes, taskRes, actRes, accessRes] = await Promise.all([
+    const [jobRes, secRes, taskRes, actRes, accessRes, carpRes] = await Promise.all([
       supabase.from('jobs').select('*').eq('id', id).single(),
       supabase.from('sections').select('*').eq('job_id', id).order('created_at'),
       supabase.from('tasks').select('*, needs(*)').eq('job_id', id).order('created_at'),
       supabase.from('activity').select('*').eq('job_id', id).order('created_at', { ascending: false }).limit(50),
-      supabase.from('job_access').select('*').eq('job_id', id).order('joined_at', { ascending: false })
+      supabase.from('job_access').select('*').eq('job_id', id).order('joined_at', { ascending: false }),
+      supabase.from('carpenters').select('*').eq('active', true).order('name')
     ])
     if (jobRes.data) setJob(jobRes.data)
     setSections(secRes.data || [])
     setTasks(taskRes.data || [])
     setActivity(actRes.data || [])
     setJobAccess(accessRes.data || [])
+    setCarpenterRoster(carpRes.data || [])
     setLoading(false)
   }
 
@@ -105,8 +117,22 @@ export default function JobPage() {
     setJobAccess(prev => prev.map(a => a.id === accessId ? { ...a, revoked_at: null } : a))
   }
 
+  async function grantCarpenterAccess(carpenterId) {
+    const existing = jobAccess.find(a => a.carpenter_id === carpenterId && !a.revoked_at)
+    if (existing) { showToast('Already has access'); return }
+    const carp = carpenterRoster.find(c => c.id === carpenterId)
+    const { data, error } = await supabase.from('job_access').insert([{
+      job_id: id, carpenter_id: carpenterId, name: carp?.name, role: 'carpenter'
+    }]).select().single()
+    if (!error && data) {
+      setJobAccess(prev => [data, ...prev])
+      showToast((carp?.name || 'Carpenter') + ' added')
+    }
+  }
+
   function userName() {
     if (!user) return 'Unknown'
+    if (user.isCarpenter) return user.name
     if (!user.isGuest) return 'FJ'
     const name = user.email.trim()
     const parts = name.split(/\s+/)
@@ -116,6 +142,7 @@ export default function JobPage() {
 
   function userRole() {
     if (!user) return 'viewer'
+    if (user.isCarpenter) return 'carpenter'
     return user.isGuest ? user.role : 'admin'
   }
 
@@ -208,6 +235,17 @@ export default function JobPage() {
       setTasks(prev => prev.map(t => t.id === taskId ? data : t))
       await logActivity(isDone ? `reopened "${task.title}"` : `completed "${task.title}"`)
       showToast(isDone ? 'Task reopened' : 'Task done ✓')
+    }
+  }
+
+  async function markBlocked(taskId) {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task || task.status !== 'ready') return
+    const { data, error } = await supabase.from('tasks').update({ status: 'blocked', prev_status: 'ready' }).eq('id', taskId).select('*, needs(*)').single()
+    if (!error && data) {
+      setTasks(prev => prev.map(t => t.id === taskId ? data : t))
+      await logActivity(`marked "${task.title}" as blocked`)
+      showToast('Task marked as blocked')
     }
   }
 
@@ -473,6 +511,12 @@ export default function JobPage() {
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
                   Delete
                 </button>
+                {!done && !blocked && (
+                  <button className="action-btn" onClick={() => markBlocked(task.id)}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+                    Mark blocked
+                  </button>
+                )}
                 {blocked && (
                   <button className="action-btn" onClick={() => { setNeedForm({ text: '', task_id: task.id }); setModal('need') }}>
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -980,16 +1024,32 @@ export default function JobPage() {
             <div className="sheet">
               <button className="sheet-close" onClick={() => setModal(null)}>×</button>
               <div className="sheet-title">Share this job</div>
-              <p style={{ fontSize: 13, color: '#5f5e5a', marginBottom: 16 }}>Send a link to your team or client to give them access.</p>
-              <div className="share-sheet-row">
-                <div className="share-sheet-info">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#185fa5" strokeWidth="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a18' }}>Carpenter link</div>
-                    <div style={{ fontSize: 12, color: '#888780' }}>Can add and complete tasks</div>
-                  </div>
-                </div>
-                <button className="share-btn" onClick={() => { copyShareLink('carpenter'); setModal(null) }}>Copy link</button>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Carpenters</div>
+                {carpenterRoster.length === 0 ? (
+                  <div style={{ fontSize: 13, color: '#b4b2a9' }}>No carpenters on roster yet. <button className="link-btn" onClick={() => router.push('/carpenters')}>Add crew →</button></div>
+                ) : (
+                  carpenterRoster.map(carp => {
+                    const hasAccess = jobAccess.some(a => a.carpenter_id === carp.id && !a.revoked_at)
+                    return (
+                      <div key={carp.id} className="share-sheet-row" style={{ alignItems: 'center' }}>
+                        <div className="share-sheet-info">
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#185fa5" strokeWidth="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a18' }}>{carp.name}</div>
+                            <div style={{ fontSize: 12, color: '#888780' }}>{carp.email}</div>
+                          </div>
+                        </div>
+                        {hasAccess ? (
+                          <span style={{ fontSize: 12, color: '#3b6d11', fontWeight: 600 }}>Has access</span>
+                        ) : (
+                          <button className="share-btn" onClick={() => grantCarpenterAccess(carp.id)}>Grant</button>
+                        )}
+                      </div>
+                    )
+                  })
+                )}
               </div>
               <div className="share-sheet-row">
                 <div className="share-sheet-info">
