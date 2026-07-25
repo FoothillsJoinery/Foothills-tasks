@@ -13,7 +13,7 @@ export default async function handler(req, res) {
 
   const results = []
   for (const job of jobs || []) {
-    const jobUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://tasks.foothillsjoinery.com'}/job/${job.id}`
+    const jobUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'https://foothills-tasks.vercel.app'}/job/${job.id}`
     try {
       const sent = await sendDailyReport(job, jobUrl)
       results.push({ job: job.name, sent })
