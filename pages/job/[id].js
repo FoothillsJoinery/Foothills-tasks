@@ -155,11 +155,12 @@ export default function JobPage() {
   async function addTask() {
     if (!form.title.trim()) { showToast('Please enter a description'); return }
     setSaving(true)
+    const isSuggestion = userRole() === 'client'
     const { data, error } = await supabase.from('tasks').insert([{
       job_id: id,
       title: form.title.trim(),
       notes: form.notes.trim(),
-      status: form.status,
+      status: isSuggestion ? 'suggested' : form.status,
       section_id: form.section_id || null,
       created_by: userName()
     }]).select('*, needs(*)').single()
@@ -179,11 +180,12 @@ export default function JobPage() {
         await logActivity(`logged need on "${data.title}"`)
       }
       setTasks(prev => [...prev, taskWithNeeds])
-      await logActivity(`added "${data.title}" (${data.status})`)
+      await logActivity(isSuggestion ? `suggested "${data.title}"` : `added "${data.title}" (${data.status})`)
       setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '', needCategory: '' })
       setModal(null)
-      setTab(tab === 'done' ? data.status : tab)
-      showToast('Task added')
+      if (isSuggestion) setTab('suggested')
+      else setTab(tab === 'done' ? data.status : tab)
+      showToast(isSuggestion ? 'Suggestion sent to Foothills Joinery' : 'Task added')
     }
   }
 
@@ -247,6 +249,27 @@ export default function JobPage() {
       await logActivity(`marked "${task.title}" as blocked`)
       showToast('Task marked as blocked')
     }
+  }
+
+  async function approveSuggestion(taskId) {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task || task.status !== 'suggested') return
+    const { data, error } = await supabase.from('tasks').update({ status: 'ready' }).eq('id', taskId).select('*, needs(*)').single()
+    if (!error && data) {
+      setTasks(prev => prev.map(t => t.id === taskId ? data : t))
+      await logActivity(`approved suggestion "${task.title}"`)
+      showToast('Suggestion approved — task is now Ready')
+    }
+  }
+
+  async function dismissSuggestion(taskId) {
+    const task = tasks.find(t => t.id === taskId)
+    if (!task || task.status !== 'suggested') return
+    if (!confirm(`Dismiss suggestion "${task.title}"?`)) return
+    await supabase.from('tasks').delete().eq('id', taskId)
+    setTasks(prev => prev.filter(t => t.id !== taskId))
+    await logActivity(`dismissed suggestion "${task.title}"`)
+    showToast('Suggestion dismissed')
   }
 
   async function addNeed() {
@@ -463,23 +486,26 @@ export default function JobPage() {
   }
 
   const canEdit = userRole() === 'admin' || userRole() === 'carpenter'
+  const isClient = userRole() === 'client'
   const counts = {
     active: tasks.filter(t => t.status === 'ready' || t.status === 'blocked').length,
     ready: tasks.filter(t => t.status === 'ready').length,
     blocked: tasks.filter(t => t.status === 'blocked').length,
-    done: tasks.filter(t => t.status === 'done').length
+    done: tasks.filter(t => t.status === 'done').length,
+    suggested: tasks.filter(t => t.status === 'suggested').length
   }
 
   function TaskCard({ task }) {
     const done = task.status === 'done'
     const blocked = task.status === 'blocked'
+    const suggested = task.status === 'suggested'
     const isExpanded = expanded[task.id]
     const taskActivity = activity.filter(a => a.msg.includes(`"${task.title}"`)).slice(0, 3)
 
     return (
       <div className="card">
         <div className="card-header" onClick={() => setExpanded(prev => ({ ...prev, [task.id]: !prev[task.id] }))}>
-          {canEdit && (
+          {canEdit && !suggested && (
             <button
               className={`check-btn ${done ? 'checked' : ''}`}
               onClick={e => { e.stopPropagation(); toggleComplete(task.id) }}
@@ -492,8 +518,8 @@ export default function JobPage() {
             <div className={`task-title ${done ? 'done' : ''}`}>{task.title}</div>
             <div className="task-meta">By {task.created_by} · {ts(task.created_at)}{done ? ` · Done ${ts(task.completed_at)}` : ''}</div>
           </div>
-          <span className={`badge badge-${done ? 'done' : blocked ? 'blocked' : 'ready'}`}>
-            {done ? 'Done' : blocked ? 'Blocked' : 'Ready'}
+          <span className={`badge badge-${done ? 'done' : blocked ? 'blocked' : suggested ? 'suggested' : 'ready'}`}>
+            {done ? 'Done' : blocked ? 'Blocked' : suggested ? 'Suggested' : 'Ready'}
           </span>
         </div>
 
@@ -501,7 +527,22 @@ export default function JobPage() {
           <div className="card-body">
             {task.notes && <p style={{ fontSize: 13, color: '#5f5e5a', margin: '10px 0 6px', lineHeight: 1.5 }}>{task.notes}</p>}
 
-            {canEdit && (
+            {suggested && userRole() === 'admin' && (
+              <div className="task-actions">
+                <button className="action-btn" style={{ background: '#eaf3de', color: '#3b6d11', borderColor: '#639922', fontWeight: 600 }} onClick={() => approveSuggestion(task.id)}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                  Approve
+                </button>
+                <button className="action-btn action-btn-delete" onClick={() => dismissSuggestion(task.id)}>
+                  Dismiss
+                </button>
+                <button className="action-btn" onClick={() => openEdit(task.id)}>
+                  Edit
+                </button>
+              </div>
+            )}
+
+            {canEdit && !suggested && (
               <div className="task-actions">
                 <button className="action-btn" onClick={() => openEdit(task.id)}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -621,6 +662,11 @@ export default function JobPage() {
           <button className={`tab ${tab === 'done' ? 'active' : ''}`} onClick={() => setTab('done')}>
             Done <span style={{ opacity: 0.6 }}>{counts.done}</span>
           </button>
+          {(userRole() === 'admin' || isClient || counts.suggested > 0) && (
+            <button className={`tab ${tab === 'suggested' ? 'active' : ''}`} onClick={() => setTab('suggested')}>
+              Suggested <span style={{ opacity: counts.suggested > 0 ? 1 : 0.6, color: counts.suggested > 0 ? '#854f0b' : undefined, fontWeight: counts.suggested > 0 ? 700 : undefined }}>{counts.suggested}</span>
+            </button>
+          )}
         </div>
 
         {canEdit && (
@@ -632,6 +678,15 @@ export default function JobPage() {
             <button className="action-bar-btn action-bar-btn-primary" onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '', needCategory: '' }); setModal('add') }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
               Add Task
+            </button>
+          </div>
+        )}
+
+        {isClient && (
+          <div className="action-bar">
+            <button className="action-bar-btn action-bar-btn-primary" onClick={() => { setForm({ title: '', notes: '', status: 'ready', section_id: '', needText: '', needCategory: '' }); setModal('add') }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
+              Suggest a Task
             </button>
           </div>
         )}
@@ -729,7 +784,12 @@ export default function JobPage() {
           <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
             <div className="sheet">
               <button className="sheet-close" onClick={() => setModal(null)}>×</button>
-              <div className="sheet-title">{modal === 'edit' ? 'Edit task' : 'Add task'}</div>
+              <div className="sheet-title">{modal === 'edit' ? 'Edit task' : isClient ? 'Suggest a task' : 'Add task'}</div>
+              {isClient && (
+                <p style={{ fontSize: 13, color: '#5f5e5a', marginBottom: 14 }}>
+                  Foothills Joinery will review your suggestion before it's added to the work list.
+                </p>
+              )}
               <div className="form-group">
                 <label className="form-label">Description</label>
                 <input type="text" placeholder="e.g. Install upper cabinet boxes" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} autoFocus />
@@ -752,7 +812,7 @@ export default function JobPage() {
                   ))}
                 </select>
               </div>
-              {!(modal === 'edit' && tasks.find(t => t.id === editId)?.status === 'done') && (
+              {!isClient && !(modal === 'edit' && tasks.find(t => t.id === editId)?.status === 'done') && (
                 <div className="form-group">
                   <label className="form-label">Status</label>
                   <div className="toggle-row">
@@ -781,14 +841,14 @@ export default function JobPage() {
                   )}
                 </>
               )}
-              {sections.length === 0 && (
+              {sections.length === 0 && !isClient && (
                 <p style={{ fontSize: 12, color: '#888780', marginBottom: 12 }}>
                   No sections yet —{' '}
                   <button className="link-btn" onClick={() => setModal('section')}>add one first</button>
                 </p>
               )}
               <button className="submit-btn" onClick={modal === 'edit' ? saveEdit : addTask} disabled={saving}>
-                {saving ? 'Saving...' : modal === 'edit' ? 'Save changes' : 'Add task'}
+                {saving ? 'Saving...' : modal === 'edit' ? 'Save changes' : isClient ? 'Send suggestion' : 'Add task'}
               </button>
             </div>
           </div>

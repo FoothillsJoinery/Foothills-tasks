@@ -134,6 +134,7 @@ html, body {
 .badge-ready { background: #eaf3de; color: #3b6d11; }
 .badge-blocked { background: #faece7; color: #993c1d; }
 .badge-done { background: #f1efe8; color: #5f5e5a; }
+.badge-suggested { background: #faeeda; color: #854f0b; }
 
 /* Check button */
 .check-btn {
