@@ -234,7 +234,15 @@ export default function JobPage() {
       completed_by: isDone ? null : userName()
     }).eq('id', taskId).select('*, needs(*)').single()
     if (!error && data) {
-      setTasks(prev => prev.map(t => t.id === taskId ? data : t))
+      let updated = data
+      // Completing a task closes out any still-open needs on it
+      if (!isDone && (data.needs || []).some(n => !n.resolved_at)) {
+        await supabase.from('needs')
+          .update({ resolved_at: new Date().toISOString(), answer: 'Closed — task completed', resolved_by: userName() })
+          .eq('task_id', taskId).is('resolved_at', null)
+        updated = { ...data, needs: data.needs.map(n => n.resolved_at ? n : { ...n, resolved_at: new Date().toISOString(), answer: 'Closed — task completed', resolved_by: userName() }) }
+      }
+      setTasks(prev => prev.map(t => t.id === taskId ? updated : t))
       await logActivity(isDone ? `reopened "${task.title}"` : `completed "${task.title}"`)
       showToast(isDone ? 'Task reopened' : 'Task done ✓')
     }
