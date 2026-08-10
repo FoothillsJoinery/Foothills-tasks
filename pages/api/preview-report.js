@@ -11,18 +11,19 @@ export default async function handler(req, res) {
 
   const [needsRes, tasksRes, secRes] = await Promise.all([
     supabase.from('needs').select('*').eq('job_id', job_id).order('created_at'),
-    supabase.from('tasks').select('id, title, section_id').eq('job_id', job_id),
+    supabase.from('tasks').select('id, title, section_id, status').eq('job_id', job_id),
     supabase.from('sections').select('*').eq('job_id', job_id)
   ])
 
   const hiddenCategories = new Set(Array.isArray(hidden) ? hidden : hidden ? [hidden] : [])
+  const taskMap = Object.fromEntries((tasksRes.data || []).map(t => [t.id, t]))
   const needs = (needsRes.data || []).filter(n => {
+    if (taskMap[n.task_id]?.status === 'done') return false
     const cat = n.category || '__uncategorized__'
     if (hiddenCategories.has(cat)) return false
     if (since && n.created_at < since) return false
     return true
   })
-  const taskMap = Object.fromEntries((tasksRes.data || []).map(t => [t.id, t]))
   const sectionMap = Object.fromEntries((secRes.data || []).map(s => [s.id, s]))
   const jobUrl = `${req.headers.origin || 'https://foothillsjoinery.com'}/job/${job_id}`
 

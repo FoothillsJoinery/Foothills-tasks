@@ -175,13 +175,15 @@ export default function ReportPage() {
     async function load() {
       const [jobRes, taskRes, needRes, secRes] = await Promise.all([
         supabase.from('jobs').select('*').eq('id', id).single(),
-        supabase.from('tasks').select('id, title, section_id').eq('job_id', id),
+        supabase.from('tasks').select('id, title, section_id, status').eq('job_id', id),
         supabase.from('needs').select('*').eq('job_id', id).order('created_at'),
         supabase.from('sections').select('*').eq('job_id', id)
       ])
       if (jobRes.data) setJob(jobRes.data)
       setTasks(taskRes.data || [])
-      setNeeds(needRes.data || [])
+      // Needs on completed tasks are moot — keep them out of the report entirely
+      const doneTaskIds = new Set((taskRes.data || []).filter(t => t.status === 'done').map(t => t.id))
+      setNeeds((needRes.data || []).filter(n => !doneTaskIds.has(n.task_id)))
       setSections(secRes.data || [])
       setLoading(false)
     }
