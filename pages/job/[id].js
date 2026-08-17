@@ -40,6 +40,9 @@ export default function JobPage() {
   const [sendNote, setSendNote] = useState('')
   const [jobAccess, setJobAccess] = useState([])
   const [carpenterRoster, setCarpenterRoster] = useState([])
+  const [jobCodes, setJobCodes] = useState([])
+  const [codeForm, setCodeForm] = useState({ label: '', code: '', notes: '' })
+  const [editCodeId, setEditCodeId] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -87,6 +90,13 @@ export default function JobPage() {
     }
     init()
   }, [id])
+
+  // Entry codes are never fetched for client viewers
+  useEffect(() => {
+    if (!id || !user || userRole() === 'client') return
+    supabase.from('job_codes').select('*').eq('job_id', id).order('created_at')
+      .then(({ data }) => setJobCodes(data || []))
+  }, [id, user])
 
   async function loadAll() {
     if (!id) return
@@ -401,6 +411,43 @@ export default function JobPage() {
     }
   }
 
+  async function saveCode() {
+    if (!codeForm.code.trim()) { showToast('Please enter the code'); return }
+    setSaving(true)
+    const payload = {
+      label: codeForm.label.trim() || null,
+      code: codeForm.code.trim(),
+      notes: codeForm.notes.trim() || null
+    }
+    const { data, error } = editCodeId
+      ? await supabase.from('job_codes').update(payload).eq('id', editCodeId).select().single()
+      : await supabase.from('job_codes').insert([{ ...payload, job_id: id, created_by: userName() }]).select().single()
+    setSaving(false)
+    if (error) { showToast('Error saving — try again'); return }
+    if (data) {
+      setJobCodes(prev => editCodeId ? prev.map(c => c.id === editCodeId ? data : c) : [...prev, data])
+      setCodeForm({ label: '', code: '', notes: '' })
+      setEditCodeId(null)
+      showToast(editCodeId ? 'Code updated' : 'Code added')
+    }
+  }
+
+  async function deleteCode(codeId) {
+    const c = jobCodes.find(x => x.id === codeId)
+    if (!confirm(`Delete ${c?.label || 'this code'}?`)) return
+    const { error } = await supabase.from('job_codes').delete().eq('id', codeId)
+    if (!error) {
+      setJobCodes(prev => prev.filter(x => x.id !== codeId))
+      if (editCodeId === codeId) { setEditCodeId(null); setCodeForm({ label: '', code: '', notes: '' }) }
+      showToast('Code deleted')
+    }
+  }
+
+  function copyCode(code) {
+    navigator.clipboard.writeText(code)
+    showToast('Code copied')
+  }
+
   function showToast(msg) {
     setToast(msg)
     setTimeout(() => setToast(null), 2200)
@@ -679,6 +726,10 @@ export default function JobPage() {
 
         {canEdit && (
           <div className="action-bar">
+            <button className="action-bar-btn" onClick={() => { setEditCodeId(null); setCodeForm({ label: '', code: '', notes: '' }); setModal('codes') }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              Entry Codes{jobCodes.length > 0 ? ` (${jobCodes.length})` : ''}
+            </button>
             <button className="action-bar-btn" onClick={() => { setParentSectionId(null); setNewSectionName(''); setModal('section') }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
               Add Section
@@ -1083,6 +1134,64 @@ export default function JobPage() {
               <button className="submit-btn" onClick={confirmSendReport} disabled={sending || sendRecipients.length === 0}>
                 {sending ? 'Sending…' : `Send to ${sendRecipients.length} recipient${sendRecipients.length !== 1 ? 's' : ''}`}
               </button>
+            </div>
+          </div>
+        )}
+
+        {modal === 'codes' && canEdit && (
+          <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+            <div className="sheet" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
+              <button className="sheet-close" onClick={() => setModal(null)}>×</button>
+              <div className="sheet-title">Entry codes</div>
+
+              {jobCodes.length === 0 && (
+                <p style={{ fontSize: 13, color: '#b4b2a9', marginBottom: 14 }}>No codes saved for this job yet.</p>
+              )}
+              {jobCodes.map(c => (
+                <div key={c.id} className="share-sheet-row" style={{ alignItems: 'center' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#888780', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{c.label || 'Entry code'}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: '#1a1a18', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing: '0.08em', margin: '2px 0' }}>{c.code}</div>
+                    {c.notes && <div style={{ fontSize: 12, color: '#5f5e5a' }}>{c.notes}</div>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+                    <button className="share-btn" onClick={() => copyCode(c.code)}>Copy</button>
+                    {userRole() === 'admin' && (
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="resolve-btn" style={{ background: 'none', color: '#8a8880', border: '1px solid #e8e6df' }} onClick={() => { setEditCodeId(c.id); setCodeForm({ label: c.label || '', code: c.code, notes: c.notes || '' }) }}>Edit</button>
+                        <button className="resolve-btn" style={{ background: 'none', color: '#993c1d', border: '1px solid #f5c9bb' }} onClick={() => deleteCode(c.id)}>Delete</button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+
+              {userRole() === 'admin' && (
+                <div style={{ borderTop: jobCodes.length > 0 ? '1px solid #e8e6df' : 'none', marginTop: jobCodes.length > 0 ? 16 : 0, paddingTop: jobCodes.length > 0 ? 16 : 0 }}>
+                  <div className="sheet-title" style={{ fontSize: 14 }}>{editCodeId ? 'Edit code' : 'Add a code'}</div>
+                  <div className="form-group">
+                    <label className="form-label">Label</label>
+                    <input type="text" placeholder="e.g. Garage keypad, Front lockbox" value={codeForm.label} onChange={e => setCodeForm(f => ({ ...f, label: e.target.value }))} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Code</label>
+                    <input type="text" placeholder="e.g. 4482#" value={codeForm.code} onChange={e => setCodeForm(f => ({ ...f, code: e.target.value }))} onKeyDown={e => e.key === 'Enter' && saveCode()} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Notes (optional)</label>
+                    <input type="text" placeholder="e.g. Lift handle while turning" value={codeForm.notes} onChange={e => setCodeForm(f => ({ ...f, notes: e.target.value }))} />
+                  </div>
+                  <button className="submit-btn" onClick={saveCode} disabled={saving}>{saving ? 'Saving...' : editCodeId ? 'Save changes' : 'Add code'}</button>
+                  {editCodeId && (
+                    <button
+                      onClick={() => { setEditCodeId(null); setCodeForm({ label: '', code: '', notes: '' }) }}
+                      style={{ width: '100%', marginTop: 10, padding: 13, background: 'none', border: '1px solid #e8e6df', borderRadius: 8, color: '#8a8880', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      Cancel edit
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
