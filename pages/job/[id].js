@@ -91,9 +91,10 @@ export default function JobPage() {
     init()
   }, [id])
 
-  // Entry codes are never fetched for client viewers
+  // Entry codes are only fetched for signed-in users (admin + roster carpenters);
+  // RLS enforces the same rule server-side
   useEffect(() => {
-    if (!id || !user || userRole() === 'client') return
+    if (!id || !user || user.isGuest) return
     supabase.from('job_codes').select('*').eq('job_id', id).order('created_at')
       .then(({ data }) => setJobCodes(data || []))
   }, [id, user])
@@ -541,6 +542,7 @@ export default function JobPage() {
   }
 
   const canEdit = userRole() === 'admin' || userRole() === 'carpenter'
+  const canSeeCodes = !!user && !user.isGuest
   const isClient = userRole() === 'client'
   const counts = {
     active: tasks.filter(t => t.status === 'ready' || t.status === 'blocked').length,
@@ -726,10 +728,12 @@ export default function JobPage() {
 
         {canEdit && (
           <div className="action-bar">
-            <button className="action-bar-btn" onClick={() => { setEditCodeId(null); setCodeForm({ label: '', code: '', notes: '' }); setModal('codes') }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
-              Entry Codes{jobCodes.length > 0 ? ` (${jobCodes.length})` : ''}
-            </button>
+            {canSeeCodes && (
+              <button className="action-bar-btn" onClick={() => { setEditCodeId(null); setCodeForm({ label: '', code: '', notes: '' }); setModal('codes') }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+                Entry Codes{jobCodes.length > 0 ? ` (${jobCodes.length})` : ''}
+              </button>
+            )}
             <button className="action-bar-btn" onClick={() => { setParentSectionId(null); setNewSectionName(''); setModal('section') }}>
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 5v14M5 12h14"/></svg>
               Add Section
@@ -1138,7 +1142,7 @@ export default function JobPage() {
           </div>
         )}
 
-        {modal === 'codes' && canEdit && (
+        {modal === 'codes' && canSeeCodes && (
           <div className="overlay" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
             <div className="sheet" style={{ maxHeight: '90vh', overflowY: 'auto' }}>
               <button className="sheet-close" onClick={() => setModal(null)}>×</button>
