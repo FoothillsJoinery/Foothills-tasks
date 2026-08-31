@@ -356,6 +356,26 @@ export default function JobPage() {
     }
   }
 
+  async function deleteNeed() {
+    if (!confirm("Delete this need? This can't be undone.")) return
+    const task = tasks.find(t => t.id === editNeedForm.task_id)
+    const { error } = await supabase.from('needs').delete().eq('id', editNeedForm.need_id)
+    if (error) { showToast('Error deleting — try again'); return }
+    const remaining = (task?.needs || []).filter(n => n.id !== editNeedForm.need_id)
+    let updatedTask = null
+    // Same rule as resolving: if the remaining needs are all answered, the task is ready again
+    if (task?.status === 'blocked' && remaining.length > 0 && remaining.every(n => n.resolved_at)) {
+      const { data: td } = await supabase.from('tasks').update({ status: 'ready', prev_status: null }).eq('id', editNeedForm.task_id).select('*, needs(*)').single()
+      if (td) updatedTask = td
+      await logActivity(`"${task?.title}" moved to ready — all needs resolved`)
+    }
+    setTasks(prev => prev.map(t => t.id === editNeedForm.task_id ? (updatedTask || { ...t, needs: remaining }) : t))
+    await logActivity(`deleted need on "${task?.title}"`)
+    setEditNeedForm({ text: '', category: '', task_id: null, need_id: null })
+    setModal(null)
+    showToast(updatedTask ? 'Need deleted — task moved to Ready ✓' : 'Need deleted')
+  }
+
   async function deleteTask(taskId) {
     const task = tasks.find(t => t.id === taskId)
     if (!confirm(`Delete "${task?.title}"? This can't be undone.`)) return
@@ -994,6 +1014,12 @@ export default function JobPage() {
                 </select>
               </div>
               <button className="submit-btn" onClick={saveEditNeed} disabled={saving}>{saving ? 'Saving...' : 'Save'}</button>
+              <button
+                onClick={deleteNeed}
+                style={{ width: '100%', marginTop: 10, padding: 13, background: 'none', border: '1px solid #e8e6df', borderRadius: 8, color: '#993c1d', fontSize: 14, cursor: 'pointer', fontFamily: 'inherit' }}
+              >
+                Delete need
+              </button>
             </div>
           </div>
         )}
