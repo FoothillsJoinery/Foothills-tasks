@@ -43,6 +43,7 @@ export default function JobPage() {
   const [jobCodes, setJobCodes] = useState([])
   const [codeForm, setCodeForm] = useState({ label: '', code: '', notes: '' })
   const [editCodeId, setEditCodeId] = useState(null)
+  const [inviteBusy, setInviteBusy] = useState(null)
 
   useEffect(() => {
     if (!id) return
@@ -137,8 +138,60 @@ export default function JobPage() {
     }]).select().single()
     if (!error && data) {
       setJobAccess(prev => [data, ...prev])
-      showToast((carp?.name || 'Carpenter') + ' added')
+      showToast((carp?.name || 'Carpenter') + ' added — sending invite…')
+      try {
+        await requestInvite(carpenterId, true)
+        showToast('Invite emailed to ' + (carp?.name || 'carpenter'))
+      } catch (e) {
+        showToast((carp?.name || 'Carpenter') + ' added, but invite failed: ' + e.message)
+      }
     }
+  }
+
+  // Asks the server for a fresh Supabase magic link that lands the carpenter on
+  // this job; when send = true the server also emails it via Resend.
+  async function requestInvite(carpenterId, send) {
+    const { data: { session } } = await supabase.auth.getSession()
+    const r = await fetch('/api/carpenter-invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + (session?.access_token || '') },
+      body: JSON.stringify({ job_id: id, carpenter_id: carpenterId, send })
+    })
+    const body = await r.json().catch(() => ({}))
+    if (!r.ok) throw new Error(body.error || 'Request failed')
+    return body.link
+  }
+
+  async function copyInviteLink(carpenterId) {
+    setInviteBusy(carpenterId)
+    try {
+      // Pass a promise to ClipboardItem so Safari keeps the tap's user-gesture
+      // permission while the link is fetched
+      const linkPromise = requestInvite(carpenterId, false)
+      if (typeof ClipboardItem !== 'undefined' && navigator.clipboard?.write) {
+        await navigator.clipboard.write([new ClipboardItem({
+          'text/plain': linkPromise.then(link => new Blob([link], { type: 'text/plain' }))
+        })])
+      } else {
+        await navigator.clipboard.writeText(await linkPromise)
+      }
+      showToast('Invite link copied!')
+    } catch (e) {
+      showToast('Could not copy link: ' + e.message)
+    }
+    setInviteBusy(null)
+  }
+
+  async function resendInvite(carpenterId) {
+    const carp = carpenterRoster.find(c => c.id === carpenterId)
+    setInviteBusy(carpenterId)
+    try {
+      await requestInvite(carpenterId, true)
+      showToast('Invite resent to ' + (carp?.name || 'carpenter'))
+    } catch (e) {
+      showToast('Resend failed: ' + e.message)
+    }
+    setInviteBusy(null)
   }
 
   function userName() {
@@ -1249,7 +1302,12 @@ export default function JobPage() {
                           </div>
                         </div>
                         {hasAccess ? (
-                          <span style={{ fontSize: 12, color: '#3b6d11', fontWeight: 600 }}>Has access</span>
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                            <button className="share-btn" disabled={inviteBusy === carp.id} onClick={() => copyInviteLink(carp.id)}>
+                              {inviteBusy === carp.id ? 'Working…' : 'Copy invite link'}
+                            </button>
+                            <button className="link-btn" style={{ fontSize: 11 }} disabled={inviteBusy === carp.id} onClick={() => resendInvite(carp.id)}>Resend invite</button>
+                          </div>
                         ) : (
                           <button className="share-btn" onClick={() => grantCarpenterAccess(carp.id)}>Grant</button>
                         )}
