@@ -84,3 +84,25 @@ This is how you'll log in to the app as admin.
 
 Come back to this Claude conversation and describe what you're stuck on.
 I can walk you through any step in more detail.
+
+---
+
+## Carpenter invite emails (Share this job → Grant)
+
+When you tap **Grant** for a carpenter, the app emails them a one-tap sign-in
+link (Supabase magic link) that opens that job directly. Carpenters who already
+have access show **Copy invite link** (copies a fresh sign-in link) and
+**Resend invite**.
+
+One-time setup:
+1. **Vercel → Settings → Environment Variables**: add `SUPABASE_SERVICE_ROLE_KEY`
+   (Supabase → Project Settings → API → `service_role` key). Keep it secret —
+   it's only used on the server. `RESEND_API_KEY` must already be set.
+   Optional: `NEXT_PUBLIC_SITE_URL` (e.g. `https://tasks.foothillsjoinery.com`)
+   to force the link's domain.
+2. **Supabase → Authentication → URL Configuration → Redirect URLs**: add
+   `https://tasks.foothillsjoinery.com/job/**` (and your `*.vercel.app` domain
+   if you use it).
+
+Note: each magic link works once and expires (Supabase default: 1 hour), so
+"Copy invite link" generates a new one every time you tap it.
